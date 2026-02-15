@@ -64,7 +64,12 @@ if st.button("🔍 Analyze Inputs"):
             try:
                 # 1. Parse Syllabus
                 syllabus_text = extract_text_from_pdf(syllabus_file)
-                modules = parse_syllabus_modules(syllabus_text)
+                
+                # Debug: Show extracted text
+                with st.expander("Debug: Extracted Syllabus Text"):
+                    st.text(syllabus_text[:2000] + "..." if len(syllabus_text) > 2000 else syllabus_text)
+                
+                modules = parse_syllabus_modules(syllabus_text, api_key)
                 
                 # 2. Parse PYQs
                 pyq_text = ""

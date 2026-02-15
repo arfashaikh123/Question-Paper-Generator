@@ -63,27 +63,53 @@ def extract_pattern_from_text(text: str, api_key: str) -> str:
 
 # --- 3. Syllabus Parsing ---
 
-def parse_syllabus_modules(text: str) -> dict:
+def parse_syllabus_modules(text: str, api_key: str = None) -> dict:
     """
     Parses syllabus text to find 'Module: Hours' mapping.
+    1. Tries Regex first (fast).
+    2. If Regex fails and api_key is provided, uses LLM (smart).
     """
     modules = {}
     lines = text.split('\n')
     
+    # 1. Regex Approach
     for line in lines:
-        # Regex for "Module Name ... 10 Hours"
-        # Heuristic: Find digits followed by 'Hours' or 'Hrs'
         match = re.search(r'(\d+)\s*(?:Hours|Hrs)', line, re.IGNORECASE)
         if match:
             hours = int(match.group(1))
-            # Rough attempt to get topic name: text before the hours
             topic_part = line[:match.start()].strip()
-            # Cleanup: remove leading numbers/dots (e.g. "1. Introduction")
             topic_name = re.sub(r'^[\d\.\s]+', '', topic_part)
             
             if len(topic_name) > 3 and hours > 0:
                 modules[topic_name] = hours
     
+    # 2. LLM Fallback
+    if not modules and api_key:
+        try:
+            llm = ChatGroq(temperature=0, model_name="llama-3.3-70b-versatile", api_key=api_key)
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", "You are a helpful assistant that extracts structured data."),
+                ("human", """Extract the Syllabus Modules and their allocated Hours from the text below.
+                
+                **Text:**
+                {text}
+                
+                **Output Format:**
+                Return ONLY a JSON object where keys are Module Names and values are Integer Hours.
+                Example: {{"Introduction": 4, "Data Structures": 10}}
+                If no hours are explicitly mentioned, estimate based on content length or return empty {{}}.
+                """)
+            ])
+            chain = prompt | llm
+            response = chain.invoke({"text": text[:15000]})
+            content = response.content.strip()
+            # Extract JSON from potential markdown code blocks
+            if "```" in content:
+                content = content.split("```")[1].replace("json", "").strip()
+            modules = json.loads(content)
+        except Exception as e:
+            print(f"LLM Syllabus Parsing failed: {e}")
+            
     return modules
 
 # --- 4. Weightage Calculation ---
