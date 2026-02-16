@@ -60,13 +60,14 @@ if st.button("🔍 Analyze Inputs"):
     elif not syllabus_file or not pyq_files or not pattern_file:
         st.error("Please upload all required documents.")
     else:
-        with st.spinner("Analyzing documents... (This may take time if OCR is required)"):
+        with st.spinner("Analyzing documents..."):
+            st.info("ℹ️ Note: If OCR is required, the app will download the Nanonets model (~3GB) on the first run. This may take a few minutes.")
             try:
                 # 0. Pre-load OCR model if needed (optional optimization)
                 # For now, let it lazy load inside utils
                 
                 # 1. Parse Syllabus
-                syllabus_text = extract_text_from_pdf(syllabus_file, api_key=api_key)
+                syllabus_text = extract_text_from_pdf(syllabus_file)
                 
                 # Debug: Show extracted text
                 with st.expander("Debug: Extracted Syllabus Text"):
@@ -77,10 +78,10 @@ if st.button("🔍 Analyze Inputs"):
                 # 2. Parse PYQs
                 pyq_text = ""
                 for pyq in pyq_files:
-                    pyq_text += extract_text_from_pdf(pyq, api_key=api_key) + "\n"
+                    pyq_text += extract_text_from_pdf(pyq) + "\n"
                     
                 # 3. Parse Pattern
-                pattern_text = extract_text_from_pdf(pattern_file, api_key=api_key)
+                pattern_text = extract_text_from_pdf(pattern_file)
                 extracted_pattern = extract_pattern_from_text(pattern_text, api_key)
                 
                 # 4. Calculate Weights
