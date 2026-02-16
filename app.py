@@ -66,7 +66,7 @@ if st.button("🔍 Analyze Inputs"):
                 # For now, let it lazy load inside utils
                 
                 # 1. Parse Syllabus
-                syllabus_text = extract_text_from_pdf(syllabus_file)
+                syllabus_text = extract_text_from_pdf(syllabus_file, api_key=api_key)
                 
                 # Debug: Show extracted text
                 with st.expander("Debug: Extracted Syllabus Text"):
@@ -77,10 +77,10 @@ if st.button("🔍 Analyze Inputs"):
                 # 2. Parse PYQs
                 pyq_text = ""
                 for pyq in pyq_files:
-                    pyq_text += extract_text_from_pdf(pyq) + "\n"
+                    pyq_text += extract_text_from_pdf(pyq, api_key=api_key) + "\n"
                     
                 # 3. Parse Pattern
-                pattern_text = extract_text_from_pdf(pattern_file)
+                pattern_text = extract_text_from_pdf(pattern_file, api_key=api_key)
                 extracted_pattern = extract_pattern_from_text(pattern_text, api_key)
                 
                 # 4. Calculate Weights

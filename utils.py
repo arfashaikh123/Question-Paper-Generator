@@ -11,53 +11,52 @@ from collections import Counter
 
 import fitz  # PyMuPDF
 from PIL import Image
-from transformers import AutoModelForCausalLM, AutoProcessor
-import torch
+import io
+import base64
+from groq import Groq
 
-# Global model cache (simple implementation for streamlit session state handling later)
-ocr_model = None
-ocr_processor = None
+def encode_image(image):
+    buffered = io.BytesIO()
+    image.save(buffered, format="JPEG")
+    return base64.b64encode(buffered.getvalue()).decode('utf-8')
 
-def load_ocr_model():
-    """Loads the Nanonets OCR model."""
-    global ocr_model, ocr_processor
-    if ocr_model is None:
-        model_id = "nanonets/Nanonets-OCR2-3B"
-        print(f"Loading OCR Model: {model_id}...")
-        try:
-            ocr_processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
-            ocr_model = AutoModelForCausalLM.from_pretrained(
-                model_id,
-                trust_remote_code=True,
-                torch_dtype=torch.float32, # CPU friendly
-                device_map="auto"
-            )
-            print("OCR Model Loaded.")
-        except Exception as e:
-            print(f"Failed to load OCR model: {e}")
-            return None, None
-    return ocr_model, ocr_processor
-
-def ocr_page(image, model, processor):
-    """Runs OCR on a single PIL Image."""
-    if not model or not processor:
-        return ""
-    
-    prompt = "<|image|>Extract the text from this document accurately into markdown format."
-    inputs = processor(text=prompt, images=image, return_tensors="pt")
-    
-    # Simple generation parameters
-    generated_ids = model.generate(
-        **inputs,
-        max_new_tokens=1024,
-        do_sample=False
-    )
-    generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
-    return generated_text.replace(prompt, "").strip()
-
-def extract_text_from_pdf(pdf_file, use_ocr_fallback=True) -> str:
+def extract_text_with_groq_vision(image, api_key):
     """
-    Extracts text. Tries PyPDF2 first. If text seems garbled or empty, uses Nanonets OCR.
+    Uses Groq's Llama-3.2 Vision model to extract text from an image.
+    """
+    if not api_key:
+        return "Error: API Key missing for OCR."
+        
+    client = Groq(api_key=api_key)
+    base64_image = encode_image(image)
+    
+    try:
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Extract all text from this image exactly as it appears. Output only the raw text, no conversational filler."},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_image}",
+                            },
+                        },
+                    ],
+                }
+            ],
+            model="llama-3.2-11b-vision-preview",
+            temperature=0,
+            max_tokens=2048,
+        )
+        return chat_completion.choices[0].message.content
+    except Exception as e:
+        return f"Groq Vision OCR Error: {e}"
+
+def extract_text_from_pdf(pdf_file, api_key=None, use_ocr_fallback=True) -> str:
+    """
+    Extracts text. Tries PyPDF2 first. If garbled, falls back to Groq Vision OCR.
     """
     # 1. Try PyPDF2
     try:
@@ -66,37 +65,34 @@ def extract_text_from_pdf(pdf_file, use_ocr_fallback=True) -> str:
         for page in reader.pages:
             text += page.extract_text() + "\n"
             
-        # Check for garbled text (heuristic: high density of slashes/numbers or very short)
-        # The user's sample output had lots of "/" and numbers like "/1 /2 ..."
-        if len(text) < 100 or text.count('/') > len(text) * 0.1:
-            print("Detected garbled text. Falling back to OCR...")
+        # Check for garbled text (heuristic)
+        if len(text) < 50 or (len(text) > 0 and text.count('/') > len(text) * 0.1):
+            print("Detected garbled text. Falling back to Vision OCR...")
             raise Exception("Garbled Text")
             
         return text
     except Exception as e:
-        if not use_ocr_fallback:
-            return f"Error reading PDF: {e}"
+        if not use_ocr_fallback or not api_key:
+            return f"Error reading PDF (OCR unavailable): {e}"
             
-    # 2. Fallback to OCR
-    print("Starting OCR extraction...")
+    # 2. Fallback to Groq Vision OCR
+    print("Starting Groq Vision OCR extraction...")
     try:
-        # Save uploaded file temporarily if it's a Streamlit UploadedFile object (has .read())
-        # fitz needs a filename or bytes. Streamlit file has .read().
+        # Check if file pointer or bytes
         if hasattr(pdf_file, "read"):
             pdf_file.seek(0)
-            doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
+            file_bytes = pdf_file.read()
+            doc = fitz.open(stream=file_bytes, filetype="pdf")
         else:
             doc = fitz.open(pdf_file)
             
-        model, processor = load_ocr_model()
-        if not model:
-            return "Error: Could not load OCR model."
-            
         full_text = ""
-        for page in doc:
+        for page_num, page in enumerate(doc):
             pix = page.get_pixmap()
             img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-            full_text += ocr_page(img, model, processor) + "\n\n"
+            
+            ocr_text = extract_text_with_groq_vision(img, api_key)
+            full_text += f"--- Page {page_num + 1} ---\n{ocr_text}\n\n"
             
         return full_text
     except Exception as e:
