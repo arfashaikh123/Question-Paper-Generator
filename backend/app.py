@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import os
 import tempfile
+from werkzeug.utils import secure_filename
 from services.analyzer import analyze_syllabus_and_pyqs, extract_text_from_pdf
 from services.generator import generate_paper_content
 from services.pdf_maker import create_pdf
@@ -26,19 +27,22 @@ def analyze():
         temp_pyq_paths = []
         for file in pyq_files:
             if file.filename:
-                temp_path = os.path.join(tempfile.gettempdir(), file.filename)
+                filename = secure_filename(file.filename)
+                temp_path = os.path.join(tempfile.gettempdir(), filename)
                 file.save(temp_path)
                 temp_pyq_paths.append(temp_path)
         
         # Handle Reference File
         reference_text = None
         if reference_file and reference_file.filename:
-            ref_path = os.path.join(tempfile.gettempdir(), reference_file.filename)
+            filename = secure_filename(reference_file.filename)
+            ref_path = os.path.join(tempfile.gettempdir(), filename)
             reference_file.save(ref_path)
             try:
                 reference_text = extract_text_from_pdf(ref_path)
             finally:
-                os.remove(ref_path)
+                if os.path.exists(ref_path):
+                    os.remove(ref_path)
 
         # Analyze
         result = analyze_syllabus_and_pyqs(syllabus_text, temp_pyq_paths, api_key, reference_text)
@@ -46,7 +50,8 @@ def analyze():
         # Cleanup temp files
         for path in temp_pyq_paths:
             try:
-                os.remove(path)
+                if os.path.exists(path):
+                    os.remove(path)
             except:
                 pass
                 
