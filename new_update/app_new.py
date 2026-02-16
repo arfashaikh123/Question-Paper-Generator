@@ -48,20 +48,29 @@ def extract_text_from_pdf(pdf_file):
     pages = loader.load()
     return "\n".join([p.page_content for p in pages])
 
-
 def extract_topics_from_syllabus(text):
-    """
-    Detect patterns like:
-    Regression Analysis (12 Hours)
-    Hypothesis Testing - 10 Hrs
-    """
-
-    pattern = r"([A-Za-z\s]+)[\-\( ]+(\d+)\s*(?:hours|hrs|Hrs|Hours)"
-    matches = re.findall(pattern, text)
 
     topics = {}
-    for topic, hours in matches:
-        topics[topic.strip()] = int(hours)
+    lines = text.split("\n")
+
+    for i in range(len(lines)):
+        line = lines[i].strip()
+
+        # Detect module number at beginning
+        if re.match(r"^\d+\s", line):
+
+            parts = re.split(r"\s{2,}", line)
+
+            if len(parts) >= 2:
+                topic_part = parts[1]
+
+                # Try to extract hours from next lines
+                if i + 1 < len(lines):
+                    next_line = lines[i + 1]
+                    hrs_match = re.search(r"\b(\d+)\b", next_line)
+
+                    if hrs_match:
+                        topics[topic_part.strip()] = int(hrs_match.group(1))
 
     return topics
 
