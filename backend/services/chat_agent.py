@@ -67,3 +67,32 @@ class ChatAgent:
             
         except Exception as e:
             return {"reply": f"Error interacting with AI: {str(e)}", "action": None}
+
+    def refine_header_text(self, raw_text, api_key):
+        """
+        Refines raw header text into a professional exam header using LLM.
+        """
+        client = Groq(api_key=api_key)
+        
+        system_prompt = """
+        You are an expert academic typesetter. 
+        Format the following text into a professional exam header (3-4 lines max).
+        Center align implies the content, but you just return the text lines.
+        Use standard terminology (e.g. "DEPARTMENT OF...", "EXAMINATION - 202X").
+        Return ONLY the formatted text, no markdown, no quotes, no conversational filler.
+        """
+        
+        try:
+            response = client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Refine this header info: {raw_text}"}
+                ],
+                temperature=0.1,
+                max_tokens=100
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            print(f"Header refinement failed: {e}")
+            return raw_text # Fallback to raw text

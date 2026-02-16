@@ -102,6 +102,15 @@ function initStudio() {
     if (!state.analysisData.paper_pattern) {
         addChatMessage("I analyzed the syllabus but didn't find a reference pattern. I've created a standard template for you.", 'bot');
     }
+
+    // Pre-fill Header information if extracted
+    if (state.analysisData.extracted_header) {
+        const headerInput = document.getElementById('headerDetails');
+        if (headerInput) {
+            headerInput.value = state.analysisData.extracted_header;
+        }
+        addChatMessage("<i>I've extracted the exam header from your PYQ. You can check it in the 'Manual Actions' panel.</i>", 'bot');
+    }
 }
 
 // Tab Switching
@@ -199,7 +208,7 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
 });
 
 function renderPaperPreview(text, imageUrl) {
-    const collegeName = document.getElementById('collegeName').value || "COLLEGE OF ENGINEERING";
+    const headerDetails = document.getElementById('headerDetails').value || "COLLEGE OF ENGINEERING\nEXAMINATION - 202X";
     const container = document.getElementById('a4Page');
 
     let imageHtml = '';
@@ -207,11 +216,13 @@ function renderPaperPreview(text, imageUrl) {
         imageHtml = `<div style="text-align:center; margin-bottom:10px;"><img src="${imageUrl}" style="max-height:80px;"></div>`;
     }
 
+    // Format raw header logic reasonably for preview (backend does the AI perfect polish)
+    const headerLines = headerDetails.split('\n').map(line => `<div>${line.toUpperCase()}</div>`).join('');
+
     let html = `
         ${imageHtml}
-        <div style="text-align:center; margin-bottom: 2rem;">
-            <h2 style="margin:0; font-size:16pt">${collegeName.toUpperCase()}</h2>
-            <h3 style="margin:5px 0; font-size:12pt; font-weight:normal">EXAMINATION - ${new Date().getFullYear()}</h3>
+        <div style="text-align:center; margin-bottom: 2rem; font-weight:bold; font-size:14pt; line-height:1.4">
+            ${headerLines}
             <div style="border-bottom: 1px solid #000; margin-top:10px; width:100%"></div>
         </div>
         <div style="white-space: pre-wrap; font-family: 'Times New Roman'; line-height: 1.5;">${text}</div>
@@ -227,114 +238,121 @@ function renderPaperPreview(text, imageUrl) {
 document.getElementById('downloadPdfBtn').addEventListener('click', async () => {
     if (!state.generatedPaperText) return;
 
-    const collegeName = document.getElementById('collegeName').value;
-    const imageFile = document.getElementById('headerImage').files[0];
+    document.getElementById('downloadPdfBtn').addEventListener('click', async () => {
+        if (!state.generatedPaperText) return;
 
-    try {
-        let base64Image = null;
-        if (imageFile) {
-            base64Image = await new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target.result);
-                reader.readAsDataURL(imageFile);
+        const headerDetails = document.getElementById('headerDetails').value;
+        const imageFile = document.getElementById('headerImage').files[0];
+
+        try {
+            let base64Image = null;
+            if (imageFile) {
+                base64Image = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.readAsDataURL(imageFile);
+                });
+            }
+
+            showLoader("Refining Header & Generating PDF...");
+
+            const response = await fetch(`${apiBase}/download-pdf`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text_content: state.generatedPaperText,
+                    header_text_raw: headerDetails,
+                    header_image: base64Image
+                })
             });
+
+            hideLoader();
+
+            if (!response.ok) throw new Error("Download failed");
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "Question_Paper.pdf";
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+
+        } catch (err) {
+            alert(err.message);
         }
+    });
 
-        const response = await fetch(`${apiBase}/download-pdf`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                text_content: state.generatedPaperText,
-                college_name: collegeName,
-                header_image: base64Image
-            })
-        });
+    // ==========================================
+    // 5. CHAT LOGIC
+    // ==========================================
+    const chatInput = document.getElementById('chatInput');
+    const sendBtn = document.getElementById('sendMessageBtn');
+    const chatHistory = document.getElementById('chatHistory');
 
-        if (!response.ok) throw new Error("Download failed");
-
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = "Question_Paper.pdf";
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-
-    } catch (err) {
-        alert(err.message);
+    function addChatMessage(text, sender) {
+        const div = document.createElement('div');
+        div.className = `chat-msg ${sender}`;
+        div.innerHTML = text; // Allow HTML in bot responses
+        chatHistory.appendChild(div);
+        chatHistory.scrollTop = chatHistory.scrollHeight;
     }
-});
 
-// ==========================================
-// 5. CHAT LOGIC
-// ==========================================
-const chatInput = document.getElementById('chatInput');
-const sendBtn = document.getElementById('sendMessageBtn');
-const chatHistory = document.getElementById('chatHistory');
+    sendBtn.addEventListener('click', async () => {
+        const msg = chatInput.value.trim();
+        if (!msg) return;
 
-function addChatMessage(text, sender) {
-    const div = document.createElement('div');
-    div.className = `chat-msg ${sender}`;
-    div.innerHTML = text; // Allow HTML in bot responses
-    chatHistory.appendChild(div);
-    chatHistory.scrollTop = chatHistory.scrollHeight;
-}
+        addChatMessage(msg, 'user');
+        chatInput.value = '';
 
-sendBtn.addEventListener('click', async () => {
-    const msg = chatInput.value.trim();
-    if (!msg) return;
+        const loaderId = 'chat-loader-' + Date.now();
+        addChatMessage(`<span id="${loaderId}">Thinking...</span>`, 'bot');
 
-    addChatMessage(msg, 'user');
-    chatInput.value = '';
+        try {
+            const response = await fetch(`${apiBase}/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    api_key: state.apiKey,
+                    message: msg,
+                    context: {
+                        syllabus_topics: state.analysisData.syllabus_topics,
+                        paper_pattern: state.currentPattern
+                    }
+                })
+            });
 
-    const loaderId = 'chat-loader-' + Date.now();
-    addChatMessage(`<span id="${loaderId}">Thinking...</span>`, 'bot');
+            const data = await response.json();
 
-    try {
-        const response = await fetch(`${apiBase}/chat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                api_key: state.apiKey,
-                message: msg,
-                context: {
-                    syllabus_topics: state.analysisData.syllabus_topics,
-                    paper_pattern: state.currentPattern
-                }
-            })
-        });
+            // Remove loader
+            const loaderEl = document.getElementById(loaderId);
+            if (loaderEl) loaderEl.parentElement.remove();
 
-        const data = await response.json();
+            addChatMessage(data.reply, 'bot');
 
-        // Remove loader
-        const loaderEl = document.getElementById(loaderId);
-        if (loaderEl) loaderEl.parentElement.remove();
+            // Handle JSON Actions
+            if (data.action === 'update_pattern' && data.data) {
+                state.currentPattern = data.data;
+                renderBlueprint();
+                addChatMessage("<i>I've updated the pattern blueprint based on your request.</i>", 'bot');
+            }
 
-        addChatMessage(data.reply, 'bot');
-
-        // Handle JSON Actions
-        if (data.action === 'update_pattern' && data.data) {
-            state.currentPattern = data.data;
-            renderBlueprint();
-            addChatMessage("<i>I've updated the pattern blueprint based on your request.</i>", 'bot');
+        } catch (err) {
+            const loaderEl = document.getElementById(loaderId);
+            if (loaderEl) loaderEl.parentElement.textContent = "Error: " + err.message;
         }
+    });
 
-    } catch (err) {
-        const loaderEl = document.getElementById(loaderId);
-        if (loaderEl) loaderEl.parentElement.textContent = "Error: " + err.message;
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendBtn.click();
+    });
+
+    // Helpers
+    function showLoader(text) {
+        loadingText.innerText = text;
+        loader.classList.remove('hidden');
     }
-});
-
-chatInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') sendBtn.click();
-});
-
-// Helpers
-function showLoader(text) {
-    loadingText.innerText = text;
-    loader.classList.remove('hidden');
-}
-function hideLoader() {
-    loader.classList.add('hidden');
-}
+    function hideLoader() {
+        loader.classList.add('hidden');
+    }

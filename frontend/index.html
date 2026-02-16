@@ -85,8 +85,13 @@
             <!-- Manual Actions -->
             <div class="manual-controls">
                 <div class="input-group">
-                    <label>College Name</label>
-                    <input type="text" id="collegeName" placeholder="Header Name" class="glass-input compact">
+                    <label>Header Details (AI Formatted)</label>
+                    <textarea id="headerDetails" placeholder="e.g. ABC College, Mid Term 2025, CS Dept"
+                        class="glass-input compact" rows="3"></textarea>
+                </div>
+                <div class="input-group">
+                    <label>Header Logo/Image</label>
+                    <input type="file" id="headerImage" accept="image/*" class="glass-input compact">
                 </div>
                 <button id="generateBtn" class="neon-btn full-width">Generate Paper Result</button>
             </div>

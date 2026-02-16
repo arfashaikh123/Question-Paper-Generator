@@ -2,21 +2,17 @@ from fpdf import FPDF
 import re
 
 class PDF(FPDF):
-    def __init__(self, college_name="COLLEGE OF ENGINEERING", header_image_path=None):
+    def __init__(self, college_name="COLLEGE OF ENGINEERING", header_image_path=None, header_text=None):
         super().__init__()
         self.college_name = college_name
         self.header_image_path = header_image_path
+        self.header_text = header_text
 
     def header(self):
         # Render Header Image if provided
         if self.header_image_path:
             try:
-                # Calculate X to center the image. Assuming width=25mm
-                # Page width is 210mm. Center = 105mm. 
-                # If img w=25, x = 105 - 12.5 = 92.5
-                # self.image(self.header_image_path, x=92.5, y=8, w=25) 
-                
-                # Actually, let's put it on top center, say 40mm wide
+                # Top center, 40mm wide
                 self.image(self.header_image_path, x=85, y=5, w=40)
                 self.ln(35) # Move down below image
             except Exception as e:
@@ -24,13 +20,25 @@ class PDF(FPDF):
         else:
             self.ln(10) # Default spacing if no image
 
-        # Font for Header
-        self.set_font('Arial', 'B', 16)
-        # College Name
-        self.cell(0, 10, self.college_name.upper(), 0, 1, 'C')
-        
-        self.set_font('Arial', 'B', 12)
-        self.cell(0, 8, "EXAMINATION - 202X", 0, 1, 'C')
+        # Render Text Header
+        if self.header_text:
+            lines = self.header_text.split('\n')
+            for i, line in enumerate(lines):
+                if i == 0:
+                    self.set_font('Arial', 'B', 16) # Primary Title
+                    self.cell(0, 8, line.strip(), 0, 1, 'C')
+                elif i == 1:
+                    self.set_font('Arial', 'B', 14) # Secondary Title
+                    self.cell(0, 7, line.strip(), 0, 1, 'C')
+                else:
+                    self.set_font('Arial', 'B', 12) # Details
+                    self.cell(0, 6, line.strip(), 0, 1, 'C')
+        else:
+            # Fallback to old simple header
+            self.set_font('Arial', 'B', 16)
+            self.cell(0, 10, self.college_name.upper(), 0, 1, 'C')
+            self.set_font('Arial', 'B', 12)
+            self.cell(0, 8, "EXAMINATION - 202X", 0, 1, 'C')
         
         # Line break
         self.set_line_width(0.5)
@@ -44,8 +52,8 @@ class PDF(FPDF):
         # Page number
         self.cell(0, 10, 'Page ' + str(self.page_no()) + '/{nb}', 0, 0, 'C')
 
-def create_pdf(text, college_name="COLLEGE OF ENGINEERING", header_image_path=None):
-    pdf = PDF(college_name=college_name, header_image_path=header_image_path)
+def create_pdf(text, college_name="COLLEGE OF ENGINEERING", header_image_path=None, header_text=None):
+    pdf = PDF(college_name=college_name, header_image_path=header_image_path, header_text=header_text)
     pdf.alias_nb_pages()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()

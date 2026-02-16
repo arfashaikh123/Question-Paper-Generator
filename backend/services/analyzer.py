@@ -121,7 +121,16 @@ def analyze_syllabus_and_pyqs(syllabus_text, pyq_paths, api_key, reference_text=
     if reference_text:
         paper_pattern = extract_paper_pattern(reference_text, api_key)
 
-    # 5. Allocation
+    # 5. Header Extraction (from first PYQ)
+    extracted_header = None
+    if pyq_paths:
+        try:
+            first_pyq_text = extract_text_from_pdf(pyq_paths[0])
+            extracted_header = extract_header_info(first_pyq_text, api_key)
+        except Exception as e:
+            print(f"Failed to extract header from PYQ: {e}")
+
+    # 6. Allocation
     # If pattern exists, allocation might be different (section based), 
     # but for now we still return default_allocation for the frontend visualization
     default_allocation = calculate_allocation(priority_scores)
@@ -131,7 +140,8 @@ def analyze_syllabus_and_pyqs(syllabus_text, pyq_paths, api_key, reference_text=
         "frequency": frequency,
         "priority_scores": priority_scores,
         "default_allocation": default_allocation,
-        "paper_pattern": paper_pattern
+        "paper_pattern": paper_pattern,
+        "extracted_header": extracted_header
     }
 
 def extract_paper_pattern(text, api_key):
@@ -191,4 +201,39 @@ def extract_paper_pattern(text, api_key):
         return json.loads(response.choices[0].message.content)
     except Exception as e:
         print(f"Pattern Extraction Failed: {e}")
+        return None
+
+def extract_header_info(text, api_key):
+    """
+    Extracts the exam header information from the text.
+    """
+    client = Groq(api_key=api_key)
+    prompt = f"""
+    Extract the **Exam Header Information** from the following text (first page of a question paper).
+    
+    **Text:**
+    {text[:2000]}
+    
+    **Goal:**
+    Return a clean, formatted 3-4 line header block containing:
+    - College/University Name
+    - Department (if any)
+    - Exam Name (e.g. Mid Term, Semester V)
+    - Session/Year
+    
+    **Format:** 
+    Just the text, plain and simple, centered-style (no markdown alignment syntax).
+    If you can't find specific details, just return what looks like the header.
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=200
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Header Extraction Failed: {e}")
         return None

@@ -97,11 +97,21 @@ def download_pdf():
         data = request.json
         text_content = data.get('text_content')
         college_name = data.get('college_name', 'COLLEGE OF ENGINEERING') # Default if empty
+        college_name = data.get('college_name', 'COLLEGE OF ENGINEERING') # Default if empty
         header_image_data = data.get('header_image') # Base64 string
+        header_text_raw = data.get('header_text_raw') # New input
         
         if not text_content:
             return jsonify({"error": "No content provided"}), 400
             
+        # Refine Header if provided
+        polished_header = None
+        if header_text_raw:
+            # Use the ChatAgent to perfect the header
+             # We need a key for this agent interaction. Use global or from request.
+            api_key = GROQ_API_KEY 
+            polished_header = chat_agent.refine_header_text(header_text_raw, api_key)
+
         # Handle Header Image
         temp_img_path = None
         if header_image_data:
@@ -119,7 +129,7 @@ def download_pdf():
                 print(f"Error decoding image: {e}")
                 temp_img_path = None
 
-        pdf_bytes = create_pdf(text_content, college_name, header_image_path=temp_img_path)
+        pdf_bytes = create_pdf(text_content, college_name, header_image_path=temp_img_path, header_text=polished_header)
         
         # Cleanup Image
         if temp_img_path and os.path.exists(temp_img_path):
