@@ -1,0 +1,92 @@
+from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
+import os
+import tempfile
+from services.analyzer import analyze_syllabus_and_pyqs
+from services.generator import generate_paper_content
+from services.pdf_maker import create_pdf
+
+app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
+
+@app.route('/api/analyze', methods=['POST'])
+def analyze():
+    try:
+        data = request.form
+        syllabus_text = data.get('syllabus_text')
+        api_key = data.get('api_key')
+        
+        if not syllabus_text or not api_key:
+            return jsonify({"error": "Missing syllabus text or API key"}), 400
+        
+        pyq_files = request.files.getlist('pyq_files')
+        
+        # Save PYQs temporarily
+        temp_pyq_paths = []
+        for file in pyq_files:
+            if file.filename:
+                temp_path = os.path.join(tempfile.gettempdir(), file.filename)
+                file.save(temp_path)
+                temp_pyq_paths.append(temp_path)
+        
+        # Analyze
+        result = analyze_syllabus_and_pyqs(syllabus_text, temp_pyq_paths, api_key)
+        
+        # Cleanup temp files
+        for path in temp_pyq_paths:
+            try:
+                os.remove(path)
+            except:
+                pass
+                
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/generate', methods=['POST'])
+def generate():
+    try:
+        data = request.json
+        api_key = data.get('api_key')
+        allocation = data.get('allocation')
+        
+        if not api_key or not allocation:
+            return jsonify({"error": "Missing API key or allocation data"}), 400
+            
+        # Generate Text Content
+        paper_text = generate_paper_content(allocation, api_key)
+        
+        return jsonify({"paper_text": paper_text})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/download-pdf', methods=['POST'])
+def download_pdf():
+    try:
+        data = request.json
+        text_content = data.get('text_content')
+        
+        if not text_content:
+            return jsonify({"error": "No content provided"}), 400
+            
+        pdf_bytes = create_pdf(text_content)
+        
+        # Save to temp file to send
+        temp_pdf_path = os.path.join(tempfile.gettempdir(), "generated_paper.pdf")
+        with open(temp_pdf_path, "wb") as f:
+            f.write(pdf_bytes)
+            
+        return send_file(
+            temp_pdf_path,
+            as_attachment=True,
+            download_name="question_paper.pdf",
+            mimetype="application/pdf"
+        )
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
