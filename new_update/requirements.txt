@@ -7,3 +7,4 @@ fastembed
 faiss-cpu
 huggingface-hub
 groq
+langchain
