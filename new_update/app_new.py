@@ -10,7 +10,27 @@ from langchain_community.document_loaders import PyPDFLoader
 # --- API SETUP ---
 # ==============================
 
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+# ==============================
+# --- API INPUT ---
+# ==============================
+
+st.sidebar.header("🔐 Groq API Configuration")
+
+groq_key_input = st.sidebar.text_input(
+    "Enter Groq API Key",
+    type="password",
+    help="Get your key from https://console.groq.com"
+)
+
+if groq_key_input:
+    st.session_state["GROQ_API_KEY"] = groq_key_input
+
+if "GROQ_API_KEY" not in st.session_state:
+    st.warning("⚠️ Please enter your Groq API Key in the sidebar.")
+    st.stop()
+
+from groq import Groq
+client = Groq(api_key=st.session_state["GROQ_API_KEY"])
 
 if not GROQ_API_KEY:
     st.error("❌ GROQ_API_KEY not set. Please configure environment variable.")
