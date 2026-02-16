@@ -62,33 +62,28 @@ def parse_and_clean_syllabus(raw_text):
     topics = {}
     lines = [line.strip() for line in raw_text.split("\n") if line.strip()]
 
-    ignore_words = ["module", "content", "hrs", "hr", "hours"]
+    for i in range(len(lines) - 2):
 
-    for i in range(len(lines) - 1):
+        # Pattern:
+        # Module number
+        # Topic
+        # Hours
 
-        line = lines[i]
-        next_line = lines[i + 1]
+        if lines[i].isdigit():  # Module number
 
-        # Skip structural words
-        if any(word in line.lower() for word in ignore_words):
-            continue
+            topic = lines[i + 1]
+            hrs_line = lines[i + 2]
 
-        # Skip if line is numeric (serial number)
-        if line.isdigit():
-            continue
+            if hrs_line.isdigit():
 
-        # Next line must be numeric
-        if next_line.isdigit():
+                hours = int(hrs_line)
 
-            hours = int(next_line)
-
-            # Accept realistic teaching hours only
-            if 4 <= hours <= 12:
-
-                if len(line) > 5 and any(c.isalpha() for c in line):
-                    topics[line] = hours
+                # Accept realistic hour range
+                if 4 <= hours <= 12 and len(topic) > 5:
+                    topics[topic] = hours
 
     return topics
+
 
 # =====================================================
 # PDF TEXT EXTRACTION
