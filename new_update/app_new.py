@@ -71,18 +71,38 @@ def load_pdf_text(pdf_file):
     return " ".join([p.page_content for p in pages])
 
 
-def extract_topics(syllabus_text):
-    lines = syllabus_text.split("\n")
-    topics = []
+def extract_topics_with_llm(syllabus_text):
 
-    for line in lines:
-        line = line.strip()
-        if len(line) > 5 and (
-            line.startswith("-") or
-            re.match(r"^\d+[\.\)]", line)
-        ):
-            topic = re.sub(r"^\d+[\.\)]\s*", "", line)
-            topics.append(topic)
+    prompt = f"""
+Extract main syllabus topics from the following syllabus text.
+
+Rules:
+- Return ONLY a clean bullet list.
+- Do not explain.
+- Do not include extra text.
+- Only major topics (ignore sub-points).
+
+SYLLABUS:
+{syllabus_text[:4000]}
+"""
+
+    response = client.chat.completions.create(
+        model="llama3-8b-8192",
+        messages=[
+            {"role": "system", "content": "You are an academic syllabus parser."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0,
+        max_tokens=800,
+    )
+
+    output = response.choices[0].message.content
+
+    topics = []
+    for line in output.split("\n"):
+        line = line.strip("-• ").strip()
+        if len(line) > 3:
+            topics.append(line)
 
     return list(set(topics))
 
