@@ -1,118 +1,166 @@
 import streamlit as st
-from groq import Groq
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
-from langchain_community.vectorstores import FAISS
+import pdfplumber
+import re
 
 # =====================================================
 # PAGE CONFIG
 # =====================================================
 
-st.set_page_config(page_title="PDF Text Retrieval System", layout="wide")
+st.set_page_config(page_title="Advanced PDF Extractor", layout="wide")
 
-st.title("📄 Intelligent PDF Text Retrieval System")
-st.markdown("Groq Ready • FAISS Vector Search • FastEmbed Embeddings")
+st.title("📄 Advanced Exam PDF Extraction & Cleaning System")
+st.markdown("Watermark Removal • Question Formatting • Table Structuring")
 
 # =====================================================
-# SIDEBAR
+# FILE UPLOAD
 # =====================================================
 
-st.sidebar.header("🔐 Groq API Key (Optional for Now)")
-
-api_key = st.sidebar.text_input(
-    "Enter Groq API Key",
-    type="password",
-    help="Not used yet. Reserved for generation step."
-)
-
-st.sidebar.header("📄 Upload PDF Files")
-
-pdf_files = st.sidebar.file_uploader(
-    "Upload one or more PDFs",
+pdf_files = st.file_uploader(
+    "Upload Exam PDF(s)",
     type=["pdf"],
     accept_multiple_files=True
 )
 
-st.sidebar.header("🔍 Retrieval Query")
-
-query = st.sidebar.text_area(
-    "Enter search query",
-    value="Important concepts and key topics",
-    height=100
-)
-
-search_button = st.sidebar.button("🚀 Extract & Retrieve")
-
 # =====================================================
-# MAIN FUNCTION
+# CLEAN WATERMARK / HEADER / FOOTER
 # =====================================================
 
-def extract_and_retrieve():
+def clean_text(text):
 
-    if not pdf_files:
-        st.error("❌ Please upload at least one PDF.")
-        return
+    # Remove long hexadecimal watermark strings
+    text = re.sub(r"\b[A-F0-9]{20,}\b", "", text)
 
-    # Optional Groq initialization (for future use)
-    if api_key:
-        try:
-            client = Groq(api_key=api_key)
-            st.success("✅ Groq API Initialized Successfully (Ready for next step).")
-        except Exception as e:
-            st.warning(f"⚠️ Groq Initialization Failed: {str(e)}")
+    # Remove page number formats like: 28560 Page 1 of 2
+    text = re.sub(r"\b\d+\s*Page\s*\d+\s*of\s*\d+\b", "", text, flags=re.IGNORECASE)
 
-    # Load PDFs
-    with st.spinner("📄 Loading PDFs..."):
-        all_pages = []
+    # Remove subject header repetition
+    text = re.sub(r"Paper\s*/\s*Subject\s*Code:.*?\n", "", text)
 
-        for pdf in pdf_files:
-            temp_path = f"/tmp/{pdf.name}"
-            with open(temp_path, "wb") as f:
-                f.write(pdf.read())
+    # Remove Total Marks / Hours header
+    text = re.sub(r"\(.*?Hours\).*?Total\s*Marks\s*\d+", "", text)
 
-            loader = PyPDFLoader(temp_path)
-            pages = loader.load()
-            all_pages.extend(pages)
+    # Remove NB instructions block
+    text = re.sub(r"\bNB\b.*?(?=Q\d)", "", text, flags=re.DOTALL)
 
-        if not all_pages:
-            st.error("❌ No text could be extracted.")
-            return
+    # Remove excessive whitespace
+    text = re.sub(r"\n\s*\n", "\n\n", text)
+    text = re.sub(r"\s{2,}", " ", text)
 
-    # Split into chunks
-    with st.spinner("✂️ Splitting text into chunks..."):
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=100
+    return text.strip()
+
+
+# =====================================================
+# FORMAT QUESTIONS PROPERLY
+# =====================================================
+
+def format_questions(text):
+
+    # Separate main questions (Q1, Q2...)
+    text = re.sub(r"(Q\d+)", r"\n\n\1", text)
+
+    # Separate sub-parts like a), b), c)
+    text = re.sub(r"\s([a-d]\))", r"\n   \1", text)
+
+    # Separate roman numeral parts i), ii), iii)
+    text = re.sub(r"\s(i{1,3}\))", r"\n      \1", text)
+
+    return text.strip()
+
+
+# =====================================================
+# FORMAT NUMERIC TABLES
+# =====================================================
+
+def format_numeric_tables(text):
+
+    # Detect patterns like: 2 10 4 20 6 25 8 30
+    pattern = r"(\d+\s+\d+(?:\s+\d+\s+\d+)+)"
+
+    matches = re.findall(pattern, text)
+
+    for match in matches:
+        numbers = match.split()
+        if len(numbers) % 2 == 0:
+            formatted = "\n"
+            for i in range(0, len(numbers), 2):
+                formatted += f"{numbers[i]}  |  {numbers[i+1]}\n"
+            text = text.replace(match, formatted)
+
+    return text
+
+
+# =====================================================
+# EXTRACT TEXT + TABLES PER PDF
+# =====================================================
+
+def extract_pdf_content(pdf_file):
+
+    extracted_text = ""
+    extracted_tables = []
+
+    with pdfplumber.open(pdf_file) as pdf:
+
+        for page in pdf.pages:
+
+            # Extract page text
+            page_text = page.extract_text()
+            if page_text:
+                extracted_text += page_text + "\n\n"
+
+            # Extract tables
+            tables = page.extract_tables()
+            for table in tables:
+                extracted_tables.append(table)
+
+    return extracted_text, extracted_tables
+
+
+# =====================================================
+# MAIN PROCESSING
+# =====================================================
+
+if pdf_files:
+
+    for pdf in pdf_files:
+
+        st.header(f"📘 Processing: {pdf.name}")
+
+        with st.spinner("Extracting and cleaning content..."):
+
+            # Step 1: Raw extraction
+            raw_text, tables = extract_pdf_content(pdf)
+
+            # Step 2: Cleaning
+            cleaned_text = clean_text(raw_text)
+
+            # Step 3: Format questions
+            formatted_text = format_questions(cleaned_text)
+
+            # Step 4: Format numeric tables
+            final_text = format_numeric_tables(formatted_text)
+
+        # =====================================================
+        # DISPLAY CLEANED TEXT
+        # =====================================================
+
+        st.subheader("📄 Cleaned & Structured Text")
+        st.text_area(
+            "Extracted Content",
+            final_text,
+            height=500
         )
-        chunks = splitter.split_documents(all_pages)
 
-    # Create vector store
-    with st.spinner("🧠 Generating embeddings & building vector store..."):
-        embeddings = FastEmbedEmbeddings()
-        vector_store = FAISS.from_documents(chunks, embeddings)
+        # =====================================================
+        # DISPLAY TABLES (if detected)
+        # =====================================================
 
-    # Retrieve relevant content
-    with st.spinner("🔍 Retrieving relevant content..."):
-        retriever = vector_store.as_retriever(
-            search_kwargs={"k": min(8, len(chunks))}
-        )
+        if tables:
+            st.subheader("📊 Extracted Tables")
+            for idx, table in enumerate(tables):
+                st.write(f"Table {idx + 1}")
+                st.table(table)
+        else:
+            st.info("No structured tables detected.")
 
-        results = retriever.invoke(query)
-
-    retrieved_text = "\n\n".join([doc.page_content for doc in results])
-
-    st.success("✅ Retrieval Complete!")
-
-    st.subheader("📄 Retrieved Text")
-    st.markdown(f"**Query:** {query}")
-    st.markdown("---")
-    st.write(retrieved_text)
-
-
-# =====================================================
-# TRIGGER
-# =====================================================
-
-if search_button:
-    extract_and_retrieve()
+else:
+    st.info("Upload a PDF to begin extraction.")

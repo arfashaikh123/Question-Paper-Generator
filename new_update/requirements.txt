@@ -1,8 +1,4 @@
 streamlit
-groq
-langchain
-langchain-community
-faiss-cpu
-fastembed
+pdfplumber
 pypdf
 numpy
