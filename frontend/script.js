@@ -147,3 +147,96 @@ downloadPdfBtn.addEventListener('click', async () => {
         alert(err.message);
     }
 });
+
+// ==========================================
+// CHATBOT LOGIC
+// ==========================================
+const chatContainer = document.getElementById('chatContainer');
+const chatTriggerBtn = document.getElementById('chatTriggerBtn');
+const closeChatBtn = document.getElementById('closeChatBtn');
+const chatInput = document.getElementById('chatInput');
+const sendMessageBtn = document.getElementById('sendMessageBtn');
+const chatHistory = document.getElementById('chatHistory');
+
+// Toggle Chat
+function toggleChat() {
+    chatContainer.classList.toggle('closed');
+}
+
+chatTriggerBtn.addEventListener('click', toggleChat);
+closeChatBtn.addEventListener('click', toggleChat);
+
+// Append Message
+function appendMessage(text, sender) {
+    const div = document.createElement('div');
+    div.className = `chat-msg ${sender}`;
+    div.textContent = text;
+    chatHistory.appendChild(div);
+    chatHistory.scrollTop = chatHistory.scrollHeight;
+}
+
+// Send Message
+async function sendChatMessage() {
+    const message = chatInput.value.trim();
+    if (!message) return;
+
+    if (!analysisData) {
+        alert("Please analyze a syllabus first so I have context!");
+        return;
+    }
+
+    const apiKey = document.getElementById('apiKey').value;
+
+    // UI Update
+    appendMessage(message, 'user');
+    chatInput.value = '';
+    const loadingMsg = document.createElement('div');
+    loadingMsg.className = 'chat-msg bot';
+    loadingMsg.textContent = "Thinking...";
+    chatHistory.appendChild(loadingMsg);
+
+    try {
+        const response = await fetch(`${apiBase}/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                api_key: apiKey,
+                message: message,
+                context: {
+                    syllabus_topics: analysisData.syllabus_topics,
+                    paper_pattern: analysisData.paper_pattern,
+                    priority_scores: analysisData.priority_scores
+                }
+            })
+        });
+
+        const data = await response.json();
+        chatHistory.removeChild(loadingMsg);
+
+        if (data.error) throw new Error(data.error);
+
+        appendMessage(data.reply, 'bot');
+
+        // Handle Actions (Future)
+        if (data.action === 'regenerate_suggestion') {
+            appendMessage("💡 Tip: You can click 'Generate Paper' again to see changes if I've updated the config (not yet implemented).", 'bot');
+        }
+
+    } catch (err) {
+        chatHistory.removeChild(loadingMsg);
+        appendMessage("Error: " + err.message, 'bot');
+    }
+}
+
+sendMessageBtn.addEventListener('click', sendChatMessage);
+chatInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') sendChatMessage();
+});
+
+// Show Chat Button after analysis
+const originalAnalyze = analyzeBtn.onclick;
+// Note: We use addEventListener, so we can just add another listener
+analyzeBtn.addEventListener('click', () => {
+    // Show chat button once analysis starts/completes
+    chatTriggerBtn.classList.remove('hidden');
+});

@@ -83,9 +83,29 @@
                 <p id="loadingText">Synthesizing Neural Pathways...</p>
             </div>
         </main>
-    </div>
+        <!-- Chatbot Interface -->
+        <div id="chatContainer" class="chat-container closed">
+            <div class="chat-header">
+                <span>AI Assistant</span>
+                <button id="closeChatBtn" class="close-chat">×</button>
+            </div>
+            <div id="chatHistory" class="chat-history">
+                <div class="chat-msg bot">Hello! I'm here to help you refine your question paper. Analyze a syllabus
+                    first to get started!</div>
+            </div>
+            <div class="chat-input-area">
+                <input type="text" id="chatInput" placeholder="Ask to change the pattern, suggest questions..."
+                    class="glass-input">
+                <button id="sendMessageBtn" class="neon-btn small-btn">Send</button>
+            </div>
+        </div>
 
-    <script src="script.js"></script>
+        <!-- Chat Trigger Button -->
+        <button id="chatTriggerBtn" class="chat-trigger hidden">
+            💬
+        </button>
+
+        <script src="script.js"></script>
 </body>
 
 </html>

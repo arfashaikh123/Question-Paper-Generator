@@ -6,6 +6,9 @@ from werkzeug.utils import secure_filename
 from services.analyzer import analyze_syllabus_and_pyqs, extract_text_from_pdf
 from services.generator import generate_paper_content
 from services.pdf_maker import create_pdf
+from services.chat_agent import ChatAgent
+
+chat_agent = ChatAgent()
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -28,7 +31,8 @@ def analyze():
         for file in pyq_files:
             if file.filename:
                 filename = secure_filename(file.filename)
-                temp_path = os.path.join(tempfile.gettempdir(), filename)
+                # Use abspath to avoid potential issues with relative paths or mixed slashes
+                temp_path = os.path.abspath(os.path.join(tempfile.gettempdir(), filename))
                 file.save(temp_path)
                 temp_pyq_paths.append(temp_path)
         
@@ -36,7 +40,7 @@ def analyze():
         reference_text = None
         if reference_file and reference_file.filename:
             filename = secure_filename(reference_file.filename)
-            ref_path = os.path.join(tempfile.gettempdir(), filename)
+            ref_path = os.path.abspath(os.path.join(tempfile.gettempdir(), filename))
             reference_file.save(ref_path)
             try:
                 reference_text = extract_text_from_pdf(ref_path)
@@ -104,6 +108,23 @@ def download_pdf():
             download_name="question_paper.pdf",
             mimetype="application/pdf"
         )
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    try:
+        data = request.json
+        api_key = data.get('api_key')
+        message = data.get('message')
+        context = data.get('context', {})
+        
+        if not api_key or not message:
+            return jsonify({"error": "Missing API key or message"}), 400
+            
+        response = chat_agent.process_message(message, context, api_key)
+        return jsonify(response)
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
