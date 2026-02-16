@@ -60,8 +60,11 @@ if st.button("🔍 Analyze Inputs"):
     elif not syllabus_file or not pyq_files or not pattern_file:
         st.error("Please upload all required documents.")
     else:
-        with st.spinner("Analyzing documents..."):
+        with st.spinner("Analyzing documents... (This may take time if OCR is required)"):
             try:
+                # 0. Pre-load OCR model if needed (optional optimization)
+                # For now, let it lazy load inside utils
+                
                 # 1. Parse Syllabus
                 syllabus_text = extract_text_from_pdf(syllabus_file)
                 

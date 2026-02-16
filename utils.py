@@ -9,20 +9,98 @@ from collections import Counter
 
 # --- 1. Text Extraction (OCR / PDF Reading) ---
 
-def extract_text_from_pdf(pdf_file) -> str:
+import fitz  # PyMuPDF
+from PIL import Image
+from transformers import AutoModelForCausalLM, AutoProcessor
+import torch
+
+# Global model cache (simple implementation for streamlit session state handling later)
+ocr_model = None
+ocr_processor = None
+
+def load_ocr_model():
+    """Loads the Nanonets OCR model."""
+    global ocr_model, ocr_processor
+    if ocr_model is None:
+        model_id = "nanonets/Nanonets-OCR2-3B"
+        print(f"Loading OCR Model: {model_id}...")
+        try:
+            ocr_processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
+            ocr_model = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                trust_remote_code=True,
+                torch_dtype=torch.float32, # CPU friendly
+                device_map="auto"
+            )
+            print("OCR Model Loaded.")
+        except Exception as e:
+            print(f"Failed to load OCR model: {e}")
+            return None, None
+    return ocr_model, ocr_processor
+
+def ocr_page(image, model, processor):
+    """Runs OCR on a single PIL Image."""
+    if not model or not processor:
+        return ""
+    
+    prompt = "<|image|>Extract the text from this document accurately into markdown format."
+    inputs = processor(text=prompt, images=image, return_tensors="pt")
+    
+    # Simple generation parameters
+    generated_ids = model.generate(
+        **inputs,
+        max_new_tokens=1024,
+        do_sample=False
+    )
+    generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+    return generated_text.replace(prompt, "").strip()
+
+def extract_text_from_pdf(pdf_file, use_ocr_fallback=True) -> str:
     """
-    Extracts text from a PDF file. 
-    Tries PyPDF2 first (fast). If text is too short, assumes scanned and would ideally use OCR.
-    For this implementation, we will stick to PyPDF2 for speed unless user explicitly aids setup.
+    Extracts text. Tries PyPDF2 first. If text seems garbled or empty, uses Nanonets OCR.
     """
+    # 1. Try PyPDF2
     try:
         reader = PdfReader(pdf_file)
         text = ""
         for page in reader.pages:
             text += page.extract_text() + "\n"
+            
+        # Check for garbled text (heuristic: high density of slashes/numbers or very short)
+        # The user's sample output had lots of "/" and numbers like "/1 /2 ..."
+        if len(text) < 100 or text.count('/') > len(text) * 0.1:
+            print("Detected garbled text. Falling back to OCR...")
+            raise Exception("Garbled Text")
+            
         return text
     except Exception as e:
-        return f"Error reading PDF: {e}"
+        if not use_ocr_fallback:
+            return f"Error reading PDF: {e}"
+            
+    # 2. Fallback to OCR
+    print("Starting OCR extraction...")
+    try:
+        # Save uploaded file temporarily if it's a Streamlit UploadedFile object (has .read())
+        # fitz needs a filename or bytes. Streamlit file has .read().
+        if hasattr(pdf_file, "read"):
+            pdf_file.seek(0)
+            doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
+        else:
+            doc = fitz.open(pdf_file)
+            
+        model, processor = load_ocr_model()
+        if not model:
+            return "Error: Could not load OCR model."
+            
+        full_text = ""
+        for page in doc:
+            pix = page.get_pixmap()
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            full_text += ocr_page(img, model, processor) + "\n\n"
+            
+        return full_text
+    except Exception as e:
+        return f"OCR Failed: {e}"
 
 # --- 2. Pattern Extraction (LLM Based) ---
 
