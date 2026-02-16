@@ -1,4 +1,5 @@
 [build]
+  base = "."
   publish = "frontend"
   command = "# no build command needed for static site"
 
