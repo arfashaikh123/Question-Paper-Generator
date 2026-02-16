@@ -238,121 +238,118 @@ function renderPaperPreview(text, imageUrl) {
 document.getElementById('downloadPdfBtn').addEventListener('click', async () => {
     if (!state.generatedPaperText) return;
 
-    document.getElementById('downloadPdfBtn').addEventListener('click', async () => {
-        if (!state.generatedPaperText) return;
+    const headerDetails = document.getElementById('headerDetails').value;
+    const imageFile = document.getElementById('headerImage').files[0];
 
-        const headerDetails = document.getElementById('headerDetails').value;
-        const imageFile = document.getElementById('headerImage').files[0];
-
-        try {
-            let base64Image = null;
-            if (imageFile) {
-                base64Image = await new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onload = (e) => resolve(e.target.result);
-                    reader.readAsDataURL(imageFile);
-                });
-            }
-
-            showLoader("Refining Header & Generating PDF...");
-
-            const response = await fetch(`${apiBase}/download-pdf`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    text_content: state.generatedPaperText,
-                    header_text_raw: headerDetails,
-                    header_image: base64Image
-                })
+    try {
+        let base64Image = null;
+        if (imageFile) {
+            base64Image = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.readAsDataURL(imageFile);
             });
-
-            hideLoader();
-
-            if (!response.ok) throw new Error("Download failed");
-
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = "Question_Paper.pdf";
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-
-        } catch (err) {
-            alert(err.message);
         }
-    });
 
-    // ==========================================
-    // 5. CHAT LOGIC
-    // ==========================================
-    const chatInput = document.getElementById('chatInput');
-    const sendBtn = document.getElementById('sendMessageBtn');
-    const chatHistory = document.getElementById('chatHistory');
+        showLoader("Refining Header & Generating PDF...");
 
-    function addChatMessage(text, sender) {
-        const div = document.createElement('div');
-        div.className = `chat-msg ${sender}`;
-        div.innerHTML = text; // Allow HTML in bot responses
-        chatHistory.appendChild(div);
-        chatHistory.scrollTop = chatHistory.scrollHeight;
+        const response = await fetch(`${apiBase}/download-pdf`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text_content: state.generatedPaperText,
+                header_text_raw: headerDetails,
+                header_image: base64Image
+            })
+        });
+
+        hideLoader();
+
+        if (!response.ok) throw new Error("Download failed");
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = "Question_Paper.pdf";
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+
+    } catch (err) {
+        alert(err.message);
     }
+});
 
-    sendBtn.addEventListener('click', async () => {
-        const msg = chatInput.value.trim();
-        if (!msg) return;
+// ==========================================
+// 5. CHAT LOGIC
+// ==========================================
+const chatInput = document.getElementById('chatInput');
+const sendBtn = document.getElementById('sendMessageBtn');
+const chatHistory = document.getElementById('chatHistory');
 
-        addChatMessage(msg, 'user');
-        chatInput.value = '';
+function addChatMessage(text, sender) {
+    const div = document.createElement('div');
+    div.className = `chat-msg ${sender}`;
+    div.innerHTML = text; // Allow HTML in bot responses
+    chatHistory.appendChild(div);
+    chatHistory.scrollTop = chatHistory.scrollHeight;
+}
 
-        const loaderId = 'chat-loader-' + Date.now();
-        addChatMessage(`<span id="${loaderId}">Thinking...</span>`, 'bot');
+sendBtn.addEventListener('click', async () => {
+    const msg = chatInput.value.trim();
+    if (!msg) return;
 
-        try {
-            const response = await fetch(`${apiBase}/chat`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    api_key: state.apiKey,
-                    message: msg,
-                    context: {
-                        syllabus_topics: state.analysisData.syllabus_topics,
-                        paper_pattern: state.currentPattern
-                    }
-                })
-            });
+    addChatMessage(msg, 'user');
+    chatInput.value = '';
 
-            const data = await response.json();
+    const loaderId = 'chat-loader-' + Date.now();
+    addChatMessage(`<span id="${loaderId}">Thinking...</span>`, 'bot');
 
-            // Remove loader
-            const loaderEl = document.getElementById(loaderId);
-            if (loaderEl) loaderEl.parentElement.remove();
+    try {
+        const response = await fetch(`${apiBase}/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                api_key: state.apiKey,
+                message: msg,
+                context: {
+                    syllabus_topics: state.analysisData.syllabus_topics,
+                    paper_pattern: state.currentPattern
+                }
+            })
+        });
 
-            addChatMessage(data.reply, 'bot');
+        const data = await response.json();
 
-            // Handle JSON Actions
-            if (data.action === 'update_pattern' && data.data) {
-                state.currentPattern = data.data;
-                renderBlueprint();
-                addChatMessage("<i>I've updated the pattern blueprint based on your request.</i>", 'bot');
-            }
+        // Remove loader
+        const loaderEl = document.getElementById(loaderId);
+        if (loaderEl) loaderEl.parentElement.remove();
 
-        } catch (err) {
-            const loaderEl = document.getElementById(loaderId);
-            if (loaderEl) loaderEl.parentElement.textContent = "Error: " + err.message;
+        addChatMessage(data.reply, 'bot');
+
+        // Handle JSON Actions
+        if (data.action === 'update_pattern' && data.data) {
+            state.currentPattern = data.data;
+            renderBlueprint();
+            addChatMessage("<i>I've updated the pattern blueprint based on your request.</i>", 'bot');
         }
-    });
 
-    chatInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') sendBtn.click();
-    });
+    } catch (err) {
+        const loaderEl = document.getElementById(loaderId);
+        if (loaderEl) loaderEl.parentElement.textContent = "Error: " + err.message;
+    }
+});
 
-    // Helpers
-    function showLoader(text) {
-        loadingText.innerText = text;
-        loader.classList.remove('hidden');
-    }
-    function hideLoader() {
-        loader.classList.add('hidden');
-    }
+chatInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') sendBtn.click();
+});
+
+// Helpers
+function showLoader(text) {
+    loadingText.innerText = text;
+    loader.classList.remove('hidden');
+}
+function hideLoader() {
+    loader.classList.add('hidden');
+}
