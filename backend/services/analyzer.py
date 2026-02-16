@@ -143,7 +143,7 @@ def extract_paper_pattern(text, api_key):
     Analyze the following exam paper text and extract the **Structure/Pattern**.
     
     **Text:**
-    {text[:15000]}
+    {text[:20000]}
     
     **Goal:**
     Identify the Sections, their Marks, and Question Types.
@@ -157,15 +157,25 @@ def extract_paper_pattern(text, api_key):
             "total_questions": 10
         }},
         "Section B": {{
-            "description": "Short Notes (Any 3 of 5)",
+            "description": "Short Notes (Any 3 out of 5)",
             "marks_per_question": 5,
             "questions_to_attempt": 3,
             "total_questions": 5
+        }},
+        "Section C": {{
+           "description": "Long Answer (Compulsory)",
+           "marks_per_question": 10,
+           "questions_to_attempt": 2,
+           "total_questions": 2
         }}
     }}
     
-    If exact counts are unclear, estimate reasonable values for a standard 3-hour exam.
-    Return ONLY VALID JSON.
+    **CRITICAL RULES:**
+    1. Look for options like "Attempt any 3", "Compulsory", "Internal Choice".
+    2. 'questions_to_attempt' MUST be <= 'total_questions'.
+    3. If a section has internal "OR" choices (e.g. Q1 a OR b), count that as 1 question to attempt.
+    4. Estimate reasonable values if distinct sections aren't explicitly labeled but pattern is clear from marks distribution.
+    5. Return ONLY VALID JSON.
     """
     
     try:
@@ -173,9 +183,10 @@ def extract_paper_pattern(text, api_key):
             model="llama-3.1-8b-instant",
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
-            max_tokens=1000,
+            max_tokens=1500,
             response_format={"type": "json_object"}
         )
+
         import json
         return json.loads(response.choices[0].message.content)
     except Exception as e:
