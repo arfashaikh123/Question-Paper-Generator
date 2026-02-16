@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import os
 import tempfile
-from services.analyzer import analyze_syllabus_and_pyqs
+from services.analyzer import analyze_syllabus_and_pyqs, extract_text_from_pdf
 from services.generator import generate_paper_content
 from services.pdf_maker import create_pdf
 
@@ -20,6 +20,7 @@ def analyze():
             return jsonify({"error": "Missing syllabus text or API key"}), 400
         
         pyq_files = request.files.getlist('pyq_files')
+        reference_file = request.files.get('reference_file') # New input
         
         # Save PYQs temporarily
         temp_pyq_paths = []
@@ -29,8 +30,18 @@ def analyze():
                 file.save(temp_path)
                 temp_pyq_paths.append(temp_path)
         
+        # Handle Reference File
+        reference_text = None
+        if reference_file and reference_file.filename:
+            ref_path = os.path.join(tempfile.gettempdir(), reference_file.filename)
+            reference_file.save(ref_path)
+            try:
+                reference_text = extract_text_from_pdf(ref_path)
+            finally:
+                os.remove(ref_path)
+
         # Analyze
-        result = analyze_syllabus_and_pyqs(syllabus_text, temp_pyq_paths, api_key)
+        result = analyze_syllabus_and_pyqs(syllabus_text, temp_pyq_paths, api_key, reference_text)
         
         # Cleanup temp files
         for path in temp_pyq_paths:
@@ -50,12 +61,15 @@ def generate():
         data = request.json
         api_key = data.get('api_key')
         allocation = data.get('allocation')
+        # New optional params
+        paper_pattern = data.get('paper_pattern')
+        priority_scores = data.get('priority_scores')
         
-        if not api_key or not allocation:
-            return jsonify({"error": "Missing API key or allocation data"}), 400
+        if not api_key:
+            return jsonify({"error": "Missing API key"}), 400
             
         # Generate Text Content
-        paper_text = generate_paper_content(allocation, api_key)
+        paper_text = generate_paper_content(allocation, api_key, paper_pattern, priority_scores)
         
         return jsonify({"paper_text": paper_text})
 

@@ -141,6 +141,7 @@ analyzeBtn.addEventListener('click', async () => {
     const apiKey = document.getElementById('apiKey').value;
     const syllabusText = document.getElementById('syllabusText').value;
     const pyqFiles = document.getElementById('pyqFiles').files;
+    const referenceFile = document.getElementById('referenceFile').files[0];
 
     if (!apiKey || !syllabusText || pyqFiles.length === 0) {
         alert("Please fill in all fields (API Key, Syllabus, PYQs).");
@@ -150,7 +151,7 @@ analyzeBtn.addEventListener('click', async () => {
     // UI Updates
     loader.classList.remove('hidden');
     resultsSection.classList.add('hidden');
-    loadingText.textContent = "Analyzing Syllabus & PYQs...";
+    loadingText.textContent = referenceFile ? "Parsing Pattern & Analyzing..." : "Analyzing Syllabus & PYQs...";
 
     // Boost Node Activity (Visualizing Processing)
     nodes.forEach(n => {
@@ -164,6 +165,9 @@ analyzeBtn.addEventListener('click', async () => {
     formData.append('syllabus_text', syllabusText);
     for (let i = 0; i < pyqFiles.length; i++) {
         formData.append('pyq_files', pyqFiles[i]);
+    }
+    if (referenceFile) {
+        formData.append('reference_file', referenceFile);
     }
 
     try {
@@ -180,7 +184,12 @@ analyzeBtn.addEventListener('click', async () => {
 
         // Update UI
         document.getElementById('topicCount').textContent = Object.keys(data.syllabus_topics).length;
-        document.getElementById('priorityCount').textContent = Object.keys(data.priority_scores).length;
+        // Check if pattern was detected
+        if (data.paper_pattern) {
+            document.getElementById('priorityCount').innerHTML = `<span style="color:#00f3ff">Pattern Detected</span>`;
+        } else {
+            document.getElementById('priorityCount').textContent = Object.keys(data.priority_scores).length + " Priorities";
+        }
 
         resultsSection.classList.remove('hidden');
     } catch (err) {
@@ -208,7 +217,9 @@ generateBtn.addEventListener('click', async () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 api_key: document.getElementById('apiKey').value,
-                allocation: analysisData.default_allocation
+                allocation: analysisData.default_allocation,
+                paper_pattern: analysisData.paper_pattern,
+                priority_scores: analysisData.priority_scores
             })
         });
 

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,14 +10,15 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 </head>
+
 <body>
     <div id="canvas-container"></div>
-    
+
     <div class="glass-overlay">
         <!-- Sidebar -->
         <aside class="sidebar">
             <h1 class="logo">🧠 NeuroGen AI</h1>
-            
+
             <div class="input-group">
                 <label>Groq API Key</label>
                 <input type="password" id="apiKey" placeholder="sk-..." class="glass-input">
@@ -24,12 +26,18 @@
 
             <div class="input-group">
                 <label>Syllabus Text</label>
-                <textarea id="syllabusText" placeholder="Paste syllabus with hours..." class="glass-input huge"></textarea>
+                <textarea id="syllabusText" placeholder="Paste syllabus with hours..."
+                    class="glass-input huge"></textarea>
             </div>
 
             <div class="input-group">
                 <label>Upload PYQs (PDF)</label>
                 <input type="file" id="pyqFiles" multiple accept=".pdf" class="glass-input file-input">
+            </div>
+
+            <div class="input-group">
+                <label>Reference Paper (Optional)</label>
+                <input type="file" id="referenceFile" accept=".pdf" class="glass-input file-input">
             </div>
 
             <button id="analyzeBtn" class="neon-btn">
@@ -48,22 +56,22 @@
                         <h3>Topics Detected</h3>
                         <p id="topicCount">0</p>
                     </div>
-                     <div class="stat-card">
+                    <div class="stat-card">
                         <h3>Prioritized</h3>
                         <p id="priorityCount">0</p>
                     </div>
                 </div>
 
                 <div class="actions">
-                     <button id="generateBtn" class="neon-btn secondary">Generate Paper</button>
+                    <button id="generateBtn" class="neon-btn secondary">Generate Paper</button>
                 </div>
-                
+
                 <div id="paperOutput" class="paper-preview hidden">
                     <pre id="paperContent"></pre>
                     <button id="downloadPdfBtn" class="neon-btn download">Download PDF</button>
                 </div>
             </div>
-            
+
             <!-- Loading Overlay -->
             <div id="loader" class="loader hidden">
                 <div class="spinner"></div>
@@ -74,4 +82,5 @@
 
     <script src="script.js"></script>
 </body>
+
 </html>

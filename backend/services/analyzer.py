@@ -58,7 +58,7 @@ def calculate_allocation(priority_scores, total_questions=10):
         
     return allocation
 
-def analyze_syllabus_and_pyqs(syllabus_text, pyq_paths, api_key):
+def analyze_syllabus_and_pyqs(syllabus_text, pyq_paths, api_key, reference_text=None):
     client = Groq(api_key=api_key)
     
     # 1. Parse Syllabus
@@ -116,13 +116,68 @@ def analyze_syllabus_and_pyqs(syllabus_text, pyq_paths, api_key):
     # 3. Compute Priority
     priority_scores = compute_priority_scores(syllabus_topics, frequency)
     
-    # 4. Default Allocation (can be overridden by UI later, but good to return)
-    # logic ported from app_new.py
+    # 4. Pattern Extraction (if reference provided)
+    paper_pattern = None
+    if reference_text:
+        paper_pattern = extract_paper_pattern(reference_text, api_key)
+
+    # 5. Allocation
+    # If pattern exists, allocation might be different (section based), 
+    # but for now we still return default_allocation for the frontend visualization
     default_allocation = calculate_allocation(priority_scores)
 
     return {
         "syllabus_topics": syllabus_topics,
         "frequency": frequency,
         "priority_scores": priority_scores,
-        "default_allocation": default_allocation
+        "default_allocation": default_allocation,
+        "paper_pattern": paper_pattern
     }
+
+def extract_paper_pattern(text, api_key):
+    """
+    Uses LLM to deduce the exam pattern from a reference paper text.
+    """
+    client = Groq(api_key=api_key)
+    prompt = f"""
+    Analyze the following exam paper text and extract the **Structure/Pattern**.
+    
+    **Text:**
+    {text[:15000]}
+    
+    **Goal:**
+    Identify the Sections, their Marks, and Question Types.
+    
+    **Output Format (JSON ONLY):**
+    {{
+        "Section A": {{
+            "description": "10 MCQs",
+            "marks_per_question": 1,
+            "questions_to_attempt": 10,
+            "total_questions": 10
+        }},
+        "Section B": {{
+            "description": "Short Notes (Any 3 of 5)",
+            "marks_per_question": 5,
+            "questions_to_attempt": 3,
+            "total_questions": 5
+        }}
+    }}
+    
+    If exact counts are unclear, estimate reasonable values for a standard 3-hour exam.
+    Return ONLY VALID JSON.
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=1000,
+            response_format={"type": "json_object"}
+        )
+        import json
+        return json.loads(response.choices[0].message.content)
+    except Exception as e:
+        print(f"Pattern Extraction Failed: {e}")
+        return None
