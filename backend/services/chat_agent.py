@@ -29,16 +29,22 @@ class ChatAgent:
         - User Goal: Create a high-quality question paper.
         
         **Your Capabilities:**
-        1. Answer questions about the syllabus or analyzed topics.
-        2. Suggest questions for specific modules.
-        3. Help refine the paper pattern (e.g. "Make Section A harder").
+        1. Answer questions about the syllabus.
+        2. MODIFY the "Current Pattern" if the user requests changes (e.g., "Add Section C", "Change Marks").
         
-        **Rules:**
+        **RESPONSE FORMAT:**
+        You must return a valid JSON object with the following structure:
+        {{
+            "reply": "Your conversational response here.",
+            "action": "update_pattern" or null,
+            "data": {{ ...new pattern object... }} or null
+        }}
+        
+        **RULES:**
+        - If the user asks to change the pattern, you MUST return `action: "update_pattern"` and the FULL updated pattern object in `data`.
+        - The pattern object keys are Section Names (e.g. "Section A"). Values have `description`, `marks_per_question`, `total_questions`, `questions_to_attempt`.
+        - If no change is needed, set `action` to null.
         - Be concise and professional.
-        - If the user asks to change the pattern or regenerate, acknowledge it and suggest they use the UI controls or say "I can't do that directy yet, but here is a suggestion...".
-        - (Future: You will be able to trigger actions).
-        
-        Answer the user's message based on the context.
         """
         
         try:
@@ -48,18 +54,16 @@ class ChatAgent:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message}
                 ],
-                temperature=0.7,
-                max_tokens=500
+                temperature=0.1, # Lower temperature for JSON reliability
+                max_tokens=1000,
+                response_format={"type": "json_object"}
             )
             
-            reply = response.choices[0].message.content
+            # Parse the JSON response from LLM
+            content = response.choices[0].message.content
+            parsed_response = json.loads(content)
             
-            # Simple Intent Detection (for future actions)
-            action = None
-            if "regenerate" in user_message.lower() or "create new" in user_message.lower():
-                action = "regenerate_suggestion"
-            
-            return {"reply": reply, "action": action}
+            return parsed_response
             
         except Exception as e:
             return {"reply": f"Error interacting with AI: {str(e)}", "action": None}

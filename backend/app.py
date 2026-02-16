@@ -10,6 +10,10 @@ from services.chat_agent import ChatAgent
 
 chat_agent = ChatAgent()
 
+# --- CONFIGURATION ---
+# TODO: Replace with your actual Groq API Key
+GROQ_API_KEY = "gsk_... (REPLACE ME)" 
+
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
@@ -18,7 +22,8 @@ def analyze():
     try:
         data = request.form
         syllabus_text = data.get('syllabus_text')
-        api_key = data.get('api_key')
+        # Use provided key or fallback to hardcoded key
+        api_key = data.get('api_key') or GROQ_API_KEY
         
         if not syllabus_text or not api_key:
             return jsonify({"error": "Missing syllabus text or API key"}), 400
@@ -28,13 +33,14 @@ def analyze():
         
         # Save PYQs temporarily
         temp_pyq_paths = []
-        for file in pyq_files:
-            if file.filename:
-                filename = secure_filename(file.filename)
-                # Use abspath to avoid potential issues with relative paths or mixed slashes
-                temp_path = os.path.abspath(os.path.join(tempfile.gettempdir(), filename))
-                file.save(temp_path)
-                temp_pyq_paths.append(temp_path)
+        if pyq_files:
+            for file in pyq_files:
+                if file.filename:
+                    filename = secure_filename(file.filename)
+                    # Use abspath to avoid potential issues with relative paths or mixed slashes
+                    temp_path = os.path.abspath(os.path.join(tempfile.gettempdir(), filename))
+                    file.save(temp_path)
+                    temp_pyq_paths.append(temp_path)
         
         # Handle Reference File
         reference_text = None
@@ -68,7 +74,7 @@ def analyze():
 def generate():
     try:
         data = request.json
-        api_key = data.get('api_key')
+        api_key = data.get('api_key') or GROQ_API_KEY
         allocation = data.get('allocation')
         # New optional params
         paper_pattern = data.get('paper_pattern')
@@ -116,7 +122,7 @@ def download_pdf():
 def chat():
     try:
         data = request.json
-        api_key = data.get('api_key')
+        api_key = data.get('api_key') or GROQ_API_KEY
         message = data.get('message')
         context = data.get('context', {})
         
