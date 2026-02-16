@@ -1,222 +1,118 @@
 import streamlit as st
-import re
-import numpy as np
 from groq import Groq
 from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
+from langchain_community.vectorstores import FAISS
 
 # =====================================================
 # PAGE CONFIG
 # =====================================================
 
-st.set_page_config(page_title="AI Question Paper Generator", layout="wide")
+st.set_page_config(page_title="PDF Text Retrieval System", layout="wide")
 
-st.title("📄 AI Question Paper Generator (Hybrid Intelligent)")
-st.markdown("Priority-Aware • PYQ Analysis • Powered by Groq Llama3")
+st.title("📄 Intelligent PDF Text Retrieval System")
+st.markdown("Groq Ready • FAISS Vector Search • FastEmbed Embeddings")
 
 # =====================================================
-# SIDEBAR – GROQ API INPUT
+# SIDEBAR
 # =====================================================
 
-st.sidebar.header("🔐 Groq API Configuration")
+st.sidebar.header("🔐 Groq API Key (Optional for Now)")
 
 api_key = st.sidebar.text_input(
     "Enter Groq API Key",
     type="password",
-    help="Get your API key from https://console.groq.com"
+    help="Not used yet. Reserved for generation step."
 )
 
-if not api_key:
-    st.warning("⚠️ Please enter your Groq API key in the sidebar to continue.")
-    st.stop()
+st.sidebar.header("📄 Upload PDF Files")
 
-client = Groq(api_key=api_key)
-
-# =====================================================
-# SIDEBAR – FILE UPLOAD
-# =====================================================
-
-st.sidebar.header("📘 Upload Files")
-
-syllabus_file = st.sidebar.file_uploader("Upload Syllabus PDF", type=["pdf"])
-pyq_files = st.sidebar.file_uploader(
-    "Upload Previous Year Papers (Optional)",
+pdf_files = st.sidebar.file_uploader(
+    "Upload one or more PDFs",
     type=["pdf"],
     accept_multiple_files=True
 )
 
-# =====================================================
-# SIDEBAR – EXAM STRUCTURE
-# =====================================================
+st.sidebar.header("🔍 Retrieval Query")
 
-st.sidebar.header("⚙️ Exam Structure")
+query = st.sidebar.text_area(
+    "Enter search query",
+    value="Important concepts and key topics",
+    height=100
+)
 
-num_sets = st.sidebar.slider("Number of Sets", 1, 3, 1)
-mcq_count = st.sidebar.slider("MCQs", 0, 20, 5)
-short_count = st.sidebar.slider("Short Questions", 0, 15, 3)
-long_count = st.sidebar.slider("Long Questions", 0, 10, 2)
-
-generate_btn = st.sidebar.button("✨ Generate Question Paper")
+search_button = st.sidebar.button("🚀 Extract & Retrieve")
 
 # =====================================================
-# HELPER FUNCTIONS
+# MAIN FUNCTION
 # =====================================================
 
-def load_pdf_text(pdf_file):
-    temp_path = f"/tmp/{pdf_file.name}"
-    with open(temp_path, "wb") as f:
-        f.write(pdf_file.read())
+def extract_and_retrieve():
 
-    loader = PyPDFLoader(temp_path)
-    pages = loader.load()
-    return " ".join([p.page_content for p in pages])
+    if not pdf_files:
+        st.error("❌ Please upload at least one PDF.")
+        return
 
+    # Optional Groq initialization (for future use)
+    if api_key:
+        try:
+            client = Groq(api_key=api_key)
+            st.success("✅ Groq API Initialized Successfully (Ready for next step).")
+        except Exception as e:
+            st.warning(f"⚠️ Groq Initialization Failed: {str(e)}")
 
-def extract_topics_with_llm(syllabus_text):
+    # Load PDFs
+    with st.spinner("📄 Loading PDFs..."):
+        all_pages = []
 
-    prompt = f"""
-Extract main syllabus topics from the following syllabus text.
+        for pdf in pdf_files:
+            temp_path = f"/tmp/{pdf.name}"
+            with open(temp_path, "wb") as f:
+                f.write(pdf.read())
 
-Rules:
-- Return ONLY a clean bullet list.
-- Do not explain.
-- Do not include extra text.
-- Only major topics (ignore sub-points).
+            loader = PyPDFLoader(temp_path)
+            pages = loader.load()
+            all_pages.extend(pages)
 
-SYLLABUS:
-{syllabus_text[:4000]}
-"""
+        if not all_pages:
+            st.error("❌ No text could be extracted.")
+            return
 
-    response = client.chat.completions.create(
-        model="llama3-8b-8192",
-        messages=[
-            {"role": "system", "content": "You are an academic syllabus parser."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0,
-        max_tokens=800,
-    )
+    # Split into chunks
+    with st.spinner("✂️ Splitting text into chunks..."):
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=100
+        )
+        chunks = splitter.split_documents(all_pages)
 
-    output = response.choices[0].message.content
+    # Create vector store
+    with st.spinner("🧠 Generating embeddings & building vector store..."):
+        embeddings = FastEmbedEmbeddings()
+        vector_store = FAISS.from_documents(chunks, embeddings)
 
-    topics = []
-    for line in output.split("\n"):
-        line = line.strip("-• ").strip()
-        if len(line) > 3:
-            topics.append(line)
+    # Retrieve relevant content
+    with st.spinner("🔍 Retrieving relevant content..."):
+        retriever = vector_store.as_retriever(
+            search_kwargs={"k": min(8, len(chunks))}
+        )
 
-    return list(set(topics))
+        results = retriever.invoke(query)
 
+    retrieved_text = "\n\n".join([doc.page_content for doc in results])
 
-def normalize(dictionary):
-    values = np.array(list(dictionary.values()))
-    max_val = max(values) if max(values) != 0 else 1
-    return {k: v / max_val for k, v in dictionary.items()}
+    st.success("✅ Retrieval Complete!")
 
-
-def compute_priority(topics, syllabus_text, pyq_text):
-    syllabus_counts = {t: syllabus_text.lower().count(t.lower()) for t in topics}
-    pyq_counts = {t: pyq_text.lower().count(t.lower()) for t in topics}
-
-    S_norm = normalize(syllabus_counts)
-    F_norm = normalize(pyq_counts)
-
-    priority_scores = {}
-
-    for t in topics:
-        priority_scores[t] = 0.6 * S_norm[t] + 0.4 * F_norm[t]
-
-    sorted_topics = sorted(priority_scores.items(), key=lambda x: x[1], reverse=True)
-
-    return sorted_topics[:8]  # top 8 topics
-
-
-def generate_with_groq(prompt):
-    response = client.chat.completions.create(
-        model="llama3-70b-8192",
-        messages=[
-            {"role": "system", "content": "You are an expert university examiner."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.7,
-        max_tokens=2000,
-    )
-    return response.choices[0].message.content
+    st.subheader("📄 Retrieved Text")
+    st.markdown(f"**Query:** {query}")
+    st.markdown("---")
+    st.write(retrieved_text)
 
 
 # =====================================================
-# MAIN GENERATION FUNCTION
+# TRIGGER
 # =====================================================
 
-def generate_question_paper():
-
-    if not syllabus_file:
-        st.error("❌ Please upload syllabus PDF.")
-        return None
-
-    with st.spinner("📘 Reading syllabus..."):
-        syllabus_text = load_pdf_text(syllabus_file)
-
-    pyq_text = ""
-    if pyq_files:
-        with st.spinner("📚 Reading Previous Year Papers..."):
-            for f in pyq_files:
-                pyq_text += load_pdf_text(f)
-
-    topics = extract_topics(syllabus_text)
-
-    if len(topics) == 0:
-        st.error("❌ Could not extract topics automatically.")
-        return None
-
-    important_topics = compute_priority(topics, syllabus_text, pyq_text)
-
-    st.subheader("🔥 AI-Selected Important Topics")
-
-    for topic, score in important_topics:
-        st.write(f"**{topic}** — Score: {round(score, 2)}")
-
-    topic_list = "\n".join([f"- {t[0]}" for t in important_topics])
-
-    outputs = []
-
-    for set_num in range(1, num_sets + 1):
-
-        st.info(f"Generating Set {set_num}/{num_sets}...")
-
-        prompt = f"""
-Create a formal university question paper.
-
-IMPORTANT HIGH-PRIORITY TOPICS:
-{topic_list}
-
-Exam Structure:
-- MCQs: {mcq_count}
-- Short Questions: {short_count}
-- Long Questions: {long_count}
-
-Rules:
-- Allocate more questions to higher priority topics.
-- Maintain balanced coverage.
-- Professional formatting.
-- Include answer key for MCQs.
-- Start with "QUESTION PAPER - SET {set_num}"
-- Do not add explanations outside exam format.
-"""
-
-        paper = generate_with_groq(prompt)
-        outputs.append(paper)
-
-    return "\n\n" + "="*100 + "\n\n".join(outputs)
-
-
-# =====================================================
-# OUTPUT SECTION
-# =====================================================
-
-if generate_btn:
-    with st.spinner("🤖 Generating Question Paper..."):
-        result = generate_question_paper()
-
-    if result:
-        st.success("✅ Question Paper Generated Successfully!")
-        st.markdown(result)
+if search_button:
+    extract_and_retrieve()
