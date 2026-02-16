@@ -13,99 +13,131 @@
 <body>
 
 
-    <div class="glass-overlay">
-        <!-- Sidebar -->
-        <aside class="sidebar">
-            <h1 class="logo">🧠 NeuroGen AI</h1>
+    <!-- 1. LANDING PAGE -->
+    <div id="landingPage" class="landing-container">
+        <nav class="navbar" style="position: absolute; top: 20px; left: 40px;">
+            <h1 class="logo">🧠 NeuroGen <span class="highlight">Studio</span></h1>
+        </nav>
 
-            <div class="input-group">
-                <label>Groq API Key</label>
-                <input type="password" id="apiKey" placeholder="sk-..." class="glass-input">
-            </div>
+        <div class="hero-section">
+            <h2 class="hero-title">Design Intelligent Question Papers.</h2>
+            <p class="hero-subtitle">Upload your syllabus and let AI architect the perfect exam.</p>
 
-            <div class="input-group">
-                <label>Syllabus Text</label>
-                <textarea id="syllabusText" placeholder="Paste syllabus with hours..."
-                    class="glass-input huge"></textarea>
-            </div>
+            <div class="upload-card">
+                <div class="input-group">
+                    <label>Groq API Key</label>
+                    <input type="password" id="apiKey" placeholder="Optional if set in backend (sk-...)"
+                        class="glass-input">
+                </div>
 
-            <div class="input-group">
-                <label>Upload PYQs (PDF)</label>
-                <input type="file" id="pyqFiles" multiple accept=".pdf" class="glass-input file-input">
-            </div>
+                <div class="input-group">
+                    <label>Syllabus Text</label>
+                    <textarea id="syllabusText" placeholder="Paste module-wise syllabus..."
+                        class="glass-input"></textarea>
+                </div>
 
-            <div class="input-group">
-                <label>Reference Paper (Optional)</label>
-                <input type="file" id="referenceFile" accept=".pdf" class="glass-input file-input">
-            </div>
-
-            <button id="analyzeBtn" class="neon-btn">
-                <span class="btn-text">Initialize Analysis</span>
-                <div class="btn-glow"></div>
-            </button>
-        </aside>
-
-        <!-- Main Content -->
-        <main class="content-area">
-            <!-- Results Section (Hidden initially) -->
-            <div id="resultsSection" class="results-container hidden">
-                <h2 class="section-title">Analysis Complete</h2>
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <h3>Topics Detected</h3>
-                        <p id="topicCount">0</p>
+                <div class="file-drop-zone">
+                    <div class="input-group">
+                        <label>PYQs (PDF)</label>
+                        <input type="file" id="pyqFiles" multiple accept=".pdf" class="glass-input file-input">
                     </div>
-                    <div class="stat-card">
-                        <h3>Prioritized</h3>
-                        <p id="priorityCount">0</p>
+                    <div class="input-group">
+                        <label>Reference Pattern (PDF)</label>
+                        <input type="file" id="referenceFile" accept=".pdf" class="glass-input file-input">
                     </div>
                 </div>
 
-                <!-- Pattern Configuration Removed -->
-                <div class="input-group" style="margin-top: 20px;">
-                    <label>College Name (For Header)</label>
-                    <input type="text" id="collegeName" placeholder="e.g. COLLEGE OF ENGINEERING" class="glass-input">
-                </div>
-
-                <div class="actions">
-                    <button id="generateBtn" class="neon-btn secondary">Generate Paper</button>
-                </div>
-
-                <div id="paperOutput" class="paper-preview hidden">
-                    <pre id="paperContent"></pre>
-                    <button id="downloadPdfBtn" class="neon-btn download">Download PDF</button>
-                </div>
-            </div>
-
-            <!-- Loading Overlay -->
-            <div id="loader" class="loader hidden">
-                <div class="spinner"></div>
-                <p id="loadingText">Synthesizing Neural Pathways...</p>
-            </div>
-        </main>
-        <!-- Chatbot Interface -->
-        <div id="chatContainer" class="chat-container closed">
-            <div class="chat-header">
-                <span>AI Assistant</span>
-                <button id="closeChatBtn" class="close-chat">×</button>
-            </div>
-            <div id="chatHistory" class="chat-history">
-                <div class="chat-msg bot">Hello! I'm here to help you refine your question paper. Analyze a syllabus
-                    first to get started!</div>
-            </div>
-            <div class="chat-input-area">
-                <input type="text" id="chatInput" placeholder="Ask to change the pattern, suggest questions..."
-                    class="glass-input">
-                <button id="sendMessageBtn" class="neon-btn small-btn">Send</button>
+                <button id="analyzeBtn" class="neon-btn huge-btn">
+                    Start Designing <span class="arrow">→</span>
+                </button>
             </div>
         </div>
+    </div>
 
-        <!-- Chat Trigger Button -->
-        <button id="chatTriggerBtn" class="chat-trigger hidden">
-            💬
-        </button>
+    <!-- 2. STUDIO INTERFACE (Hidden Initially) -->
+    <div id="studioPage" class="studio-container hidden">
+        <!-- LEFT PANEL: Chat & Controls -->
+        <aside class="studio-left">
+            <div class="studio-header">
+                <div class="logo-small">🧠 NeuroGen</div>
+                <button id="backToHomeBtn" class="icon-btn">🏠</button>
+            </div>
 
-        <script src="script.js"></script>
+            <!-- Chat Interface -->
+            <div class="chat-interface">
+                <div id="chatHistory" class="chat-history">
+                    <div class="chat-msg bot">
+                        Analysis Complete! I've extracted the topics. You can now:
+                        <ul>
+                            <li>Ask to add sections</li>
+                            <li>Change marks distribution</li>
+                            <li>Generate the paper</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="chat-input-wrapper">
+                    <input type="text" id="chatInput" placeholder="Type instructions..." class="glass-input">
+                    <button id="sendMessageBtn" class="send-btn">➤</button>
+                </div>
+            </div>
+
+            <!-- Manual Actions -->
+            <div class="manual-controls">
+                <div class="input-group">
+                    <label>College Name</label>
+                    <input type="text" id="collegeName" placeholder="Header Name" class="glass-input compact">
+                </div>
+                <button id="generateBtn" class="neon-btn full-width">Generate Paper Result</button>
+            </div>
+        </aside>
+
+        <!-- RIGHT PANEL: Visualization & Preview -->
+        <main class="studio-right">
+            <!-- TABS -->
+            <div class="studio-tabs">
+                <button class="tab-btn active" data-tab="blueprint">📐 Pattern Blueprint</button>
+                <button class="tab-btn" data-tab="preview">📄 Paper Preview</button>
+            </div>
+
+            <!-- MODE A: BLUEPRINT VISUALIZER -->
+            <div id="blueprintView" class="view-panel active">
+                <div class="blueprint-canvas">
+                    <div id="statsBar" class="stats-bar">
+                        <div class="stat-item">Topics: <span id="topicCount">0</span></div>
+                        <div class="stat-item">Priorities: <span id="priorityCount">0</span></div>
+                    </div>
+
+                    <div id="patternCanvas" class="pattern-grid">
+                        <!-- Dynamic Cards will be injected here via JS -->
+                        <div class="empty-state">
+                            No pattern defined yet. Ask AI to "Create a standard pattern".
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MODE B: REAL PREVIEW -->
+            <div id="previewView" class="view-panel">
+                <div id="paperPreviewContainer" class="paper-stage">
+                    <!-- The A4 Page -->
+                    <div id="a4Page" class="a4-page">
+                        <!-- Content goes here -->
+                    </div>
+                </div>
+                <div class="preview-actions">
+                    <button id="downloadPdfBtn" class="neon-btn">Download PDF</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loader" class="loader hidden">
+        <div class="spinner"></div>
+        <p id="loadingText">Processing...</p>
+    </div>
+
+    <script src="script.js"></script>
 </body>
 
 </html>

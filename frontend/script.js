@@ -1,42 +1,51 @@
 // ==========================================
-// APP LOGIC & API
+// STATE MANAGEMENT
 // ==========================================
-let analysisData = null;
-const apiBase = "https://question-paper-generator-jg4p.onrender.com/api"; // Render Backend
+const state = {
+    apiKey: null,
+    syllabusText: null,
+    pyqFiles: null,
+    referenceFile: null,
+    analysisData: null,
+    currentPattern: null, // { "Section A": { ... } }
+    generatedPaperText: null
+};
+
+const apiBase = "https://question-paper-generator-jg4p.onrender.com/api";
+// const apiBase = "http://127.0.0.1:5000/api"; // Local Debug
 
 // DOM Elements
-const analyzeBtn = document.getElementById('analyzeBtn');
-const generateBtn = document.getElementById('generateBtn');
-const downloadPdfBtn = document.getElementById('downloadPdfBtn');
-const resultsSection = document.getElementById('resultsSection');
+const landingPage = document.getElementById('landingPage');
+const studioPage = document.getElementById('studioPage');
 const loader = document.getElementById('loader');
 const loadingText = document.getElementById('loadingText');
-const paperOutput = document.getElementById('paperOutput');
-const paperContent = document.getElementById('paperContent');
-const collegeNameInput = document.getElementById('collegeName');
 
-
-
-// 1. Analyze Handler
-analyzeBtn.addEventListener('click', async () => {
+// ==========================================
+// 1. LANDING PAGE LOGIC
+// ==========================================
+document.getElementById('analyzeBtn').addEventListener('click', async () => {
     const apiKey = document.getElementById('apiKey').value;
     const syllabusText = document.getElementById('syllabusText').value;
     const pyqFiles = document.getElementById('pyqFiles').files;
     const referenceFile = document.getElementById('referenceFile').files[0];
 
-    if (!apiKey || !syllabusText || pyqFiles.length === 0) {
-        alert("Please fill in all fields (API Key, Syllabus, PYQs).");
+    // API Key is optional if set in backend
+    // if (!apiKey) { ... } 
+
+    if (!syllabusText || pyqFiles.length === 0) {
+        alert("Please fill in Syllabus and at least one PYQ PDF.");
         return;
     }
 
-    // UI Updates
-    loader.classList.remove('hidden');
-    resultsSection.classList.add('hidden');
-    loadingText.textContent = referenceFile ? "Parsing Pattern & Analyzing..." : "Analyzing Syllabus & PYQs...";
+    state.apiKey = apiKey;
+    state.syllabusText = syllabusText;
+    state.pyqFiles = pyqFiles;
+    state.referenceFile = referenceFile;
 
-    // Prepare Data
+    showLoader("Initializing Neural Analysis...");
+
     const formData = new FormData();
-    formData.append('api_key', apiKey);
+    formData.append('api_key', apiKey); // Can be empty
     formData.append('syllabus_text', syllabusText);
     for (let i = 0; i < pyqFiles.length; i++) {
         formData.append('pyq_files', pyqFiles[i]);
@@ -50,84 +59,165 @@ analyzeBtn.addEventListener('click', async () => {
             method: 'POST',
             body: formData
         });
-
         const data = await response.json();
-
         if (data.error) throw new Error(data.error);
 
-        analysisData = data;
+        state.analysisData = data;
+        state.currentPattern = data.paper_pattern || getDefaultPattern();
 
-        // Update UI
-        document.getElementById('topicCount').textContent = Object.keys(data.syllabus_topics).length;
-        // Check if pattern was detected
-        if (data.paper_pattern) {
-            document.getElementById('priorityCount').innerHTML = `<span style="color:#00f3ff">Pattern Detected</span>`;
-        } else {
-            document.getElementById('priorityCount').textContent = Object.keys(data.priority_scores).length + " Priorities";
-        }
+        // Transition to Studio
+        landingPage.classList.add('hidden');
+        studioPage.classList.remove('hidden');
 
-        if (data.paper_pattern) {
-            document.getElementById('priorityCount').innerHTML = `<span style="color:#00f3ff">Pattern Detected</span>`;
-        } else {
-            document.getElementById('priorityCount').textContent = Object.keys(data.priority_scores).length + " Priorities";
-        }
+        // Init Studio
+        initStudio();
 
-        resultsSection.classList.remove('hidden');
     } catch (err) {
-        alert("Analysis Failed: " + err.message);
+        alert(err.message);
     } finally {
-        loader.classList.add('hidden');
+        hideLoader();
     }
 });
 
-// 2. Generate Handler
-generateBtn.addEventListener('click', async () => {
-    if (!analysisData) return;
+function getDefaultPattern() {
+    return {
+        "Section A": { description: "Brief Answer", marks_per_question: 5, total_questions: 4, questions_to_attempt: 4 },
+        "Section B": { description: "Short Answer", marks_per_question: 5, total_questions: 6, questions_to_attempt: 4 },
+        "Section C": { description: "Long Answer", marks_per_question: 10, total_questions: 4, questions_to_attempt: 2 }
+    };
+}
 
-    loader.classList.remove('hidden');
-    loadingText.textContent = "Generating Question Paper...";
+// ==========================================
+// 2. STUDIO LOGIC
+// ==========================================
+function initStudio() {
+    // Update Stats
+    document.getElementById('topicCount').innerText = Object.keys(state.analysisData.syllabus_topics).length;
+    document.getElementById('priorityCount').innerText = Object.keys(state.analysisData.priority_scores).length;
 
-    // Use analyzed pattern
-    const finalPattern = analysisData.paper_pattern;
+    // Render Initial View
+    renderBlueprint();
+
+    // Add Initial Bot Message
+    if (!state.analysisData.paper_pattern) {
+        addChatMessage("I analyzed the syllabus but didn't find a reference pattern. I've created a standard template for you.", 'bot');
+    }
+}
+
+// Tab Switching
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
+
+        btn.classList.add('active');
+        document.getElementById(`${btn.dataset.tab}View`).classList.add('active');
+    });
+});
+
+document.getElementById('backToHomeBtn').addEventListener('click', () => {
+    if (confirm("Exit Studio? All progress will be lost.")) {
+        studioPage.classList.add('hidden');
+        landingPage.classList.remove('hidden');
+    }
+});
+
+// ==========================================
+// 3. BLUEPRINT VISUALIZER
+// ==========================================
+function renderBlueprint() {
+    const canvas = document.getElementById('patternCanvas');
+    canvas.innerHTML = '';
+
+    if (!state.currentPattern) return;
+
+    Object.entries(state.currentPattern).forEach(([sectionName, details]) => {
+        const totalMarks = details.marks_per_question * details.questions_to_attempt;
+
+        const card = document.createElement('div');
+        card.className = 'pattern-card';
+        card.innerHTML = `
+            <div class="card-header">${sectionName}</div>
+            <div class="card-meta">${details.description}</div>
+            <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                <span class="card-tag">Marks/Q: ${details.marks_per_question}</span>
+                <span class="card-tag">Total Qs: ${details.total_questions}</span>
+                <span class="card-tag">Attempt: ${details.questions_to_attempt}</span>
+                <span class="card-tag" style="border-color:var(--neon-purple); color:var(--neon-purple)">Total: ${totalMarks}</span>
+            </div>
+        `;
+        canvas.appendChild(card);
+    });
+}
+
+// ==========================================
+// 4. GENERATION & PREVIEW
+// ==========================================
+document.getElementById('generateBtn').addEventListener('click', async () => {
+    showLoader("Generating Question Paper...");
 
     try {
         const response = await fetch(`${apiBase}/generate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                api_key: document.getElementById('apiKey').value,
-                allocation: analysisData.default_allocation,
-                paper_pattern: finalPattern,
-                priority_scores: analysisData.priority_scores
+                api_key: state.apiKey,
+                allocation: state.analysisData.default_allocation,
+                paper_pattern: state.currentPattern,
+                priority_scores: state.analysisData.priority_scores
             })
         });
 
         const data = await response.json();
         if (data.error) throw new Error(data.error);
 
-        paperContent.textContent = data.paper_text;
-        paperOutput.classList.remove('hidden');
+        state.generatedPaperText = data.paper_text;
+
+        // Auto-switch to Preview Tab
+        document.querySelector('[data-tab="preview"]').click();
+        renderPaperPreview(data.paper_text);
 
     } catch (err) {
-        alert("Generation Failed: " + err.message);
+        alert(err.message);
     } finally {
-        loader.classList.add('hidden');
+        hideLoader();
     }
 });
 
-// 3. Download PDF Handler
-downloadPdfBtn.addEventListener('click', async () => {
-    const text = paperContent.textContent;
-    if (!text) return;
+function renderPaperPreview(text) {
+    const collegeName = document.getElementById('collegeName').value || "COLLEGE OF ENGINEERING";
+    const container = document.getElementById('a4Page');
 
-    const collegeName = collegeNameInput.value.trim();
+    // Simple conversion of text to HTML structure
+    // We assume the text has markdown-like headers
+
+    let html = `
+        <div style="text-align:center; margin-bottom: 2rem;">
+            <h2 style="margin:0; font-size:16pt">${collegeName.toUpperCase()}</h2>
+            <h3 style="margin:5px 0; font-size:12pt; font-weight:normal">EXAMINATION - ${new Date().getFullYear()}</h3>
+            <div style="border-bottom: 1px solid #000; margin-top:10px; width:100%"></div>
+        </div>
+        <div style="white-space: pre-wrap; font-family: 'Times New Roman'; line-height: 1.5;">${text}</div>
+    `;
+
+    // Bold replacement
+    html = html.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+    html = html.replace(/Section [A-Z]/g, '<br><h4 style="margin:10px 0; text-decoration:underline">$&</h4>');
+
+    container.innerHTML = html;
+}
+
+document.getElementById('downloadPdfBtn').addEventListener('click', async () => {
+    if (!state.generatedPaperText) return;
+
+    const collegeName = document.getElementById('collegeName').value;
 
     try {
         const response = await fetch(`${apiBase}/download-pdf`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                text_content: text,
+                text_content: state.generatedPaperText,
                 college_name: collegeName
             })
         });
@@ -149,94 +239,74 @@ downloadPdfBtn.addEventListener('click', async () => {
 });
 
 // ==========================================
-// CHATBOT LOGIC
+// 5. CHAT LOGIC
 // ==========================================
-const chatContainer = document.getElementById('chatContainer');
-const chatTriggerBtn = document.getElementById('chatTriggerBtn');
-const closeChatBtn = document.getElementById('closeChatBtn');
 const chatInput = document.getElementById('chatInput');
-const sendMessageBtn = document.getElementById('sendMessageBtn');
+const sendBtn = document.getElementById('sendMessageBtn');
 const chatHistory = document.getElementById('chatHistory');
 
-// Toggle Chat
-function toggleChat() {
-    chatContainer.classList.toggle('closed');
-}
-
-chatTriggerBtn.addEventListener('click', toggleChat);
-closeChatBtn.addEventListener('click', toggleChat);
-
-// Append Message
-function appendMessage(text, sender) {
+function addChatMessage(text, sender) {
     const div = document.createElement('div');
     div.className = `chat-msg ${sender}`;
-    div.textContent = text;
+    div.innerHTML = text; // Allow HTML in bot responses
     chatHistory.appendChild(div);
     chatHistory.scrollTop = chatHistory.scrollHeight;
 }
 
-// Send Message
-async function sendChatMessage() {
-    const message = chatInput.value.trim();
-    if (!message) return;
+sendBtn.addEventListener('click', async () => {
+    const msg = chatInput.value.trim();
+    if (!msg) return;
 
-    if (!analysisData) {
-        alert("Please analyze a syllabus first so I have context!");
-        return;
-    }
-
-    const apiKey = document.getElementById('apiKey').value;
-
-    // UI Update
-    appendMessage(message, 'user');
+    addChatMessage(msg, 'user');
     chatInput.value = '';
-    const loadingMsg = document.createElement('div');
-    loadingMsg.className = 'chat-msg bot';
-    loadingMsg.textContent = "Thinking...";
-    chatHistory.appendChild(loadingMsg);
+
+    const loaderId = 'chat-loader-' + Date.now();
+    addChatMessage(`<span id="${loaderId}">Thinking...</span>`, 'bot');
 
     try {
         const response = await fetch(`${apiBase}/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                api_key: apiKey,
-                message: message,
+                api_key: state.apiKey,
+                message: msg,
                 context: {
-                    syllabus_topics: analysisData.syllabus_topics,
-                    paper_pattern: analysisData.paper_pattern,
-                    priority_scores: analysisData.priority_scores
+                    syllabus_topics: state.analysisData.syllabus_topics,
+                    paper_pattern: state.currentPattern
                 }
             })
         });
 
         const data = await response.json();
-        chatHistory.removeChild(loadingMsg);
 
-        if (data.error) throw new Error(data.error);
+        // Remove loader
+        const loaderEl = document.getElementById(loaderId);
+        if (loaderEl) loaderEl.parentElement.remove();
 
-        appendMessage(data.reply, 'bot');
+        addChatMessage(data.reply, 'bot');
 
-        // Handle Actions (Future)
-        if (data.action === 'regenerate_suggestion') {
-            appendMessage("💡 Tip: You can click 'Generate Paper' again to see changes if I've updated the config (not yet implemented).", 'bot');
+        // Handle JSON Actions
+        if (data.action === 'update_pattern' && data.data) {
+            state.currentPattern = data.data;
+            renderBlueprint();
+            addChatMessage("<i>I've updated the pattern blueprint based on your request.</i>", 'bot');
         }
 
     } catch (err) {
-        chatHistory.removeChild(loadingMsg);
-        appendMessage("Error: " + err.message, 'bot');
+        const loaderEl = document.getElementById(loaderId);
+        if (loaderEl) loaderEl.parentElement.textContent = "Error: " + err.message;
     }
-}
+});
 
-sendMessageBtn.addEventListener('click', sendChatMessage);
 chatInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') sendChatMessage();
+    if (e.key === 'Enter') sendBtn.click();
 });
 
-// Show Chat Button after analysis
-const originalAnalyze = analyzeBtn.onclick;
-// Note: We use addEventListener, so we can just add another listener
-analyzeBtn.addEventListener('click', () => {
-    // Show chat button once analysis starts/completes
-    chatTriggerBtn.classList.remove('hidden');
-});
+// Helpers
+function showLoader(text) {
+    loadingText.innerText = text;
+    loader.classList.remove('hidden');
+}
+function hideLoader() {
+    loader.classList.add('hidden');
+}
