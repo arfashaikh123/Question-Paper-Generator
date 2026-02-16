@@ -153,6 +153,9 @@ function renderBlueprint() {
 // ==========================================
 // 4. GENERATION & PREVIEW
 // ==========================================
+// ==========================================
+// 4. GENERATION & PREVIEW
+// ==========================================
 document.getElementById('generateBtn').addEventListener('click', async () => {
     showLoader("Generating Question Paper...");
 
@@ -175,7 +178,18 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
 
         // Auto-switch to Preview Tab
         document.querySelector('[data-tab="preview"]').click();
-        renderPaperPreview(data.paper_text);
+
+        // Read Image for Preview
+        const imageFile = document.getElementById('headerImage').files[0];
+        if (imageFile) {
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                renderPaperPreview(data.paper_text, e.target.result);
+            };
+            reader.readAsDataURL(imageFile);
+        } else {
+            renderPaperPreview(data.paper_text, null);
+        }
 
     } catch (err) {
         alert(err.message);
@@ -184,14 +198,17 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
     }
 });
 
-function renderPaperPreview(text) {
+function renderPaperPreview(text, imageUrl) {
     const collegeName = document.getElementById('collegeName').value || "COLLEGE OF ENGINEERING";
     const container = document.getElementById('a4Page');
 
-    // Simple conversion of text to HTML structure
-    // We assume the text has markdown-like headers
+    let imageHtml = '';
+    if (imageUrl) {
+        imageHtml = `<div style="text-align:center; margin-bottom:10px;"><img src="${imageUrl}" style="max-height:80px;"></div>`;
+    }
 
     let html = `
+        ${imageHtml}
         <div style="text-align:center; margin-bottom: 2rem;">
             <h2 style="margin:0; font-size:16pt">${collegeName.toUpperCase()}</h2>
             <h3 style="margin:5px 0; font-size:12pt; font-weight:normal">EXAMINATION - ${new Date().getFullYear()}</h3>
@@ -211,14 +228,25 @@ document.getElementById('downloadPdfBtn').addEventListener('click', async () => 
     if (!state.generatedPaperText) return;
 
     const collegeName = document.getElementById('collegeName').value;
+    const imageFile = document.getElementById('headerImage').files[0];
 
     try {
+        let base64Image = null;
+        if (imageFile) {
+            base64Image = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.readAsDataURL(imageFile);
+            });
+        }
+
         const response = await fetch(`${apiBase}/download-pdf`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 text_content: state.generatedPaperText,
-                college_name: collegeName
+                college_name: collegeName,
+                header_image: base64Image
             })
         });
 

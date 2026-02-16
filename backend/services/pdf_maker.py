@@ -2,12 +2,28 @@ from fpdf import FPDF
 import re
 
 class PDF(FPDF):
-    def __init__(self, college_name="COLLEGE OF ENGINEERING"):
+    def __init__(self, college_name="COLLEGE OF ENGINEERING", header_image_path=None):
         super().__init__()
         self.college_name = college_name
+        self.header_image_path = header_image_path
 
     def header(self):
-        # Logo placeholder (optional, skipping for now)
+        # Render Header Image if provided
+        if self.header_image_path:
+            try:
+                # Calculate X to center the image. Assuming width=25mm
+                # Page width is 210mm. Center = 105mm. 
+                # If img w=25, x = 105 - 12.5 = 92.5
+                # self.image(self.header_image_path, x=92.5, y=8, w=25) 
+                
+                # Actually, let's put it on top center, say 40mm wide
+                self.image(self.header_image_path, x=85, y=5, w=40)
+                self.ln(35) # Move down below image
+            except Exception as e:
+                print(f"Error loading image: {e}")
+        else:
+            self.ln(10) # Default spacing if no image
+
         # Font for Header
         self.set_font('Arial', 'B', 16)
         # College Name
@@ -18,8 +34,8 @@ class PDF(FPDF):
         
         # Line break
         self.set_line_width(0.5)
-        self.line(10, 28, 200, 28)
-        self.ln(10)
+        self.line(10, self.get_y()+5, 200, self.get_y()+5) # Dynamic Line position
+        self.ln(8)
 
     def footer(self):
         # Position at 1.5 cm from bottom
@@ -28,8 +44,8 @@ class PDF(FPDF):
         # Page number
         self.cell(0, 10, 'Page ' + str(self.page_no()) + '/{nb}', 0, 0, 'C')
 
-def create_pdf(text, college_name="COLLEGE OF ENGINEERING"):
-    pdf = PDF(college_name=college_name)
+def create_pdf(text, college_name="COLLEGE OF ENGINEERING", header_image_path=None):
+    pdf = PDF(college_name=college_name, header_image_path=header_image_path)
     pdf.alias_nb_pages()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()

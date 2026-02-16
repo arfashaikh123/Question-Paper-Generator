@@ -97,11 +97,33 @@ def download_pdf():
         data = request.json
         text_content = data.get('text_content')
         college_name = data.get('college_name', 'COLLEGE OF ENGINEERING') # Default if empty
+        header_image_data = data.get('header_image') # Base64 string
         
         if not text_content:
             return jsonify({"error": "No content provided"}), 400
             
-        pdf_bytes = create_pdf(text_content, college_name)
+        # Handle Header Image
+        temp_img_path = None
+        if header_image_data:
+            import base64
+            try:
+                # Remove header if present (e.g., "data:image/png;base64,")
+                if "," in header_image_data:
+                    header_image_data = header_image_data.split(",")[1]
+                
+                img_bytes = base64.b64decode(header_image_data)
+                temp_img_path = os.path.join(tempfile.gettempdir(), "header_logo.png")
+                with open(temp_img_path, "wb") as f:
+                    f.write(img_bytes)
+            except Exception as e:
+                print(f"Error decoding image: {e}")
+                temp_img_path = None
+
+        pdf_bytes = create_pdf(text_content, college_name, header_image_path=temp_img_path)
+        
+        # Cleanup Image
+        if temp_img_path and os.path.exists(temp_img_path):
+            os.remove(temp_img_path)
         
         # Save to temp file to send
         temp_pdf_path = os.path.join(tempfile.gettempdir(), "generated_paper.pdf")
