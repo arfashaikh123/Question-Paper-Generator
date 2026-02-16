@@ -6,5 +6,6 @@ numpy
 fpdf
 python-dotenv
 gunicorn
-langchain-community
 langchain
+langchain-community
+langchain-core
