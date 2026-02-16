@@ -1,45 +1,81 @@
 import streamlit as st
-import numpy as np
-from groq import Groq
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
-from langchain_community.vectorstores import FAISS
-from sklearn.metrics.pairwise import cosine_similarity
 import re
 from collections import defaultdict
-import pdfplumber
+from groq import Groq
+from langchain_community.document_loaders import PyPDFLoader
 
-# ============================================================
+# =====================================================
 # PAGE CONFIG
-# ============================================================
+# =====================================================
 
 st.set_page_config(page_title="Explainable AI QP Generator", layout="wide")
-st.title("📊 Explainable Algorithmic Question Paper Generator")
 
-# ============================================================
+st.title("📊 Explainable Algorithmic Question Paper Generator")
+st.markdown("Priority = 0.6 × Syllabus Weight + 0.4 × PYQ Frequency")
+
+# =====================================================
 # SIDEBAR INPUTS
-# ============================================================
+# =====================================================
 
 st.sidebar.header("🔐 Groq API Key")
 groq_key = st.sidebar.text_input("Enter Groq API Key", type="password")
 
-st.sidebar.header("📄 Upload Files")
+st.sidebar.header("📚 Paste Syllabus Text")
 
-syllabus_pdf = st.sidebar.file_uploader("Upload Syllabus PDF", type=["pdf"])
+syllabus_text_input = st.sidebar.text_area(
+    "Paste syllabus topics with hours",
+    height=250,
+    placeholder="""
+Module 1: Introduction to Statistics (6 Hours)
+Module 2 - Data Collection & Sampling Methods – 6 Hrs
+Introduction to Regression 8
+Statistical inference (6)
+Tests of hypotheses - 5
+"""
+)
+
+st.sidebar.header("📄 Upload Previous Year Papers")
 pyq_pdfs = st.sidebar.file_uploader(
-    "Upload Previous Year Papers",
+    "Upload PYQs",
     type=["pdf"],
     accept_multiple_files=True
 )
 
-st.sidebar.header("⚙️ Question Configuration")
+st.sidebar.header("⚙️ Configuration")
 total_questions = st.sidebar.slider("Total Questions", 5, 30, 10)
-generate_button = st.sidebar.button("🚀 Generate Question Paper")
+generate_button = st.sidebar.button("🚀 Generate Paper")
 
-# ============================================================
-# UTILITY FUNCTIONS
-# ============================================================
+# =====================================================
+# SYLLABUS AUTO PARSER
+# =====================================================
+
+def parse_and_clean_syllabus(raw_text):
+
+    topics = {}
+
+    text = raw_text.replace("–", "-")
+    text = re.sub(r"\s+", " ", text)
+
+    pattern1 = r"([A-Za-z &]+)\s*\(\s*(\d+)\s*(?:hours|hrs|Hrs|Hours)?\s*\)"
+    pattern2 = r"([A-Za-z &]+)\s*[-:]\s*(\d+)"
+    pattern3 = r"([A-Za-z &]+)\s+(\d+)"
+
+    matches = re.findall(pattern1, text, re.IGNORECASE)
+    matches += re.findall(pattern2, text, re.IGNORECASE)
+    matches += re.findall(pattern3, text, re.IGNORECASE)
+
+    for topic, hrs in matches:
+        topic_clean = re.sub(r"(Module|Unit)\s*\d+", "", topic, flags=re.IGNORECASE)
+        topic_clean = topic_clean.strip()
+
+        if len(topic_clean) > 3:
+            topics[topic_clean] = int(hrs)
+
+    return topics
+
+# =====================================================
+# PDF TEXT EXTRACTION
+# =====================================================
 
 def extract_text_from_pdf(pdf_file):
     temp_path = f"/tmp/{pdf_file.name}"
@@ -49,59 +85,12 @@ def extract_text_from_pdf(pdf_file):
     pages = loader.load()
     return "\n".join([p.page_content for p in pages])
 
-def extract_topics_from_syllabus(pdf_file):
-
-    topics = {}
-
-    with pdfplumber.open(pdf_file) as pdf:
-        for page in pdf.pages:
-            tables = page.extract_tables()
-
-            for table in tables:
-                # Expecting columns: Module | Content | Hrs
-                for row in table:
-                    if row and len(row) >= 3:
-
-                        module = row[0]
-                        content = row[1]
-                        hrs = row[2]
-
-                        # Skip header row
-                        if content and hrs and content.lower() != "content":
-
-                            try:
-                                topics[content.strip()] = int(str(hrs).strip())
-                            except:
-                                pass
-
-    return topics
-
-
-
-def classify_question_topic(client, question, topics):
-    topic_list = ", ".join(topics.keys())
-
-    prompt = f"""
-Classify the following question into one of these topics:
-{topic_list}
-
-Question:
-{question}
-
-Respond ONLY with topic name.
-"""
-
-    response = client.chat.completions.create(
-        model="llama-3.3-8b-instant",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=50,
-        temperature=0
-    )
-
-    return response.choices[0].message.content.strip()
-
+# =====================================================
+# PRIORITY CALCULATION
+# =====================================================
 
 def compute_priority_scores(syllabus_topics, frequency_dict):
+
     max_hours = max(syllabus_topics.values())
     max_freq = max(frequency_dict.values()) if frequency_dict else 1
 
@@ -115,20 +104,19 @@ def compute_priority_scores(syllabus_topics, frequency_dict):
 
     return priority_scores
 
-
 def allocate_questions(priority_scores, total_q):
+
     total_priority = sum(priority_scores.values())
     allocation = {}
 
     for topic, score in priority_scores.items():
-        allocation[topic] = int((score / total_priority) * total_q)
+        allocation[topic] = max(1, int((score / total_priority) * total_q))
 
     return allocation
 
-
-# ============================================================
-# MAIN GENERATION PIPELINE
-# ============================================================
+# =====================================================
+# MAIN PIPELINE
+# =====================================================
 
 if generate_button:
 
@@ -136,78 +124,102 @@ if generate_button:
         st.error("Enter Groq API Key")
         st.stop()
 
-    if not syllabus_pdf or not pyq_pdfs:
-        st.error("Upload syllabus and previous year papers")
+    if not syllabus_text_input:
+        st.error("Paste syllabus text")
+        st.stop()
+
+    if not pyq_pdfs:
+        st.error("Upload previous year papers")
         st.stop()
 
     client = Groq(api_key=groq_key)
 
-    # ========================================================
-    # PHASE 1: Extract Syllabus Topics
-    # ========================================================
-
-    with st.spinner("📘 Extracting syllabus topics..."):
-        syllabus_topics = extract_topics_from_syllabus(syllabus_pdf)
-
+    # -----------------------------
+    # Phase 1: Parse Syllabus
+    # -----------------------------
+    syllabus_topics = parse_and_clean_syllabus(syllabus_text_input)
 
     if not syllabus_topics:
-        st.error("Could not extract topics automatically. Adjust syllabus format.")
+        st.error("Could not detect topics automatically. Make sure hours are mentioned.")
         st.stop()
 
     st.subheader("📚 Extracted Syllabus Topics")
     st.json(syllabus_topics)
 
-    # ========================================================
-    # PHASE 2: Analyse PYQs
-    # ========================================================
+    # -----------------------------
+    # Phase 2: Analyse PYQs
+    # -----------------------------
+    frequency = defaultdict(int)
 
     with st.spinner("📄 Analysing Previous Year Papers..."):
-        frequency = defaultdict(int)
-
         for pdf in pyq_pdfs:
             pyq_text = extract_text_from_pdf(pdf)
             questions = pyq_text.split("?")
 
             for q in questions:
-                if len(q.strip()) > 20:
-                    topic = classify_question_topic(client, q, syllabus_topics)
+                if len(q.strip()) > 30:
+
+                    topic_list = ", ".join(syllabus_topics.keys())
+
+                    prompt = f"""
+Classify the following question into one of these topics:
+{topic_list}
+
+Question:
+{q}
+
+Respond ONLY with topic name.
+"""
+
+                    response = client.chat.completions.create(
+                        model="llama-3.3-8b-instant",
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0,
+                        max_tokens=50
+                    )
+
+                    topic = response.choices[0].message.content.strip()
+
                     if topic in syllabus_topics:
                         frequency[topic] += 1
 
-    st.subheader("📊 PYQ Frequency Analysis")
+    st.subheader("📊 PYQ Frequency")
     st.json(frequency)
 
-    # ========================================================
-    # PHASE 3: Compute Priority Scores
-    # ========================================================
-
+    # -----------------------------
+    # Phase 3: Compute Priority
+    # -----------------------------
     priority_scores = compute_priority_scores(syllabus_topics, frequency)
 
-    st.subheader("🔥 Computed Priority Scores")
+    st.subheader("🔥 Priority Scores")
     st.json(priority_scores)
 
-    # ========================================================
-    # PHASE 4: Allocate Questions
-    # ========================================================
-
+    # -----------------------------
+    # Phase 4: Allocate Questions
+    # -----------------------------
     allocation = allocate_questions(priority_scores, total_questions)
 
-    st.subheader("🧮 Question Allocation Per Topic")
+    st.subheader("🧮 Question Allocation")
     st.json(allocation)
 
-    # ========================================================
-    # PHASE 5: Controlled Generation
-    # ========================================================
+    # -----------------------------
+    # Phase 5: Controlled Generation
+    # -----------------------------
+    st.subheader("📝 Generated Question Paper")
 
     final_questions = []
 
     for topic, count in allocation.items():
         if count > 0:
+
             prompt = f"""
 Generate {count} new exam questions for topic: {topic}
 
-Avoid repeating patterns seen in previous exams.
-Ensure conceptual depth and new structure.
+Rules:
+- Avoid repeating past patterns
+- Create new structure
+- Maintain academic difficulty
+- Professional formatting
 """
 
             response = client.chat.completions.create(
@@ -219,5 +231,4 @@ Ensure conceptual depth and new structure.
 
             final_questions.append(response.choices[0].message.content)
 
-    st.subheader("📝 Generated Question Paper")
     st.markdown("\n\n".join(final_questions))
