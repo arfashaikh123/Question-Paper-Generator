@@ -124,7 +124,7 @@ animate();
 // APP LOGIC & API
 // ==========================================
 let analysisData = null;
-const apiBase = "http://localhost:5000/api"; // Flask Backend
+const apiBase = "https://question-paper-generator-jg4p.onrender.com/api"; // Render Backend
 
 // DOM Elements
 const analyzeBtn = document.getElementById('analyzeBtn');
