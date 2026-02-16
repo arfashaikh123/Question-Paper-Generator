@@ -2,26 +2,41 @@ import streamlit as st
 import os
 import re
 import numpy as np
-from collections import Counter
+from groq import Groq
+from collections import defaultdict
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
-from langchain_community.vectorstores import FAISS
-from huggingface_hub import InferenceClient
 
-# --- Model Setup ---
-HF_TOKEN = os.environ.get("HF_TOKEN", "")
-client = InferenceClient(token=HF_TOKEN)
+# ==============================
+# --- API SETUP ---
+# ==============================
+
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+
+if not GROQ_API_KEY:
+    st.error("❌ GROQ_API_KEY not set. Please configure environment variable.")
+    st.stop()
+
+client = Groq(api_key=GROQ_API_KEY)
+
+# ==============================
+# --- PAGE CONFIG ---
+# ==============================
 
 st.set_page_config(page_title="AI Question Paper Generator", layout="wide")
 
-st.title("📄 AI Question Paper Generator Pro (Priority-Aware)")
+st.title("📄 AI Question Paper Generator (Hybrid Intelligent System)")
+st.markdown("⚡ Powered by Groq + Llama3 • Priority-Aware • PYQ Analysis")
 
-# Sidebar
-st.sidebar.header("⚙️ Configuration")
+# ==============================
+# --- SIDEBAR CONFIG ---
+# ==============================
+
+st.sidebar.header("📘 Upload Files")
 
 syllabus_file = st.sidebar.file_uploader("Upload Syllabus PDF", type=["pdf"])
-pyq_files = st.sidebar.file_uploader("Upload PYQ PDFs", type=["pdf"], accept_multiple_files=True)
+pyq_files = st.sidebar.file_uploader("Upload Previous Year Papers (Optional)", type=["pdf"], accept_multiple_files=True)
+
+st.sidebar.header("⚙️ Exam Structure")
 
 num_sets = st.sidebar.slider("Number of Sets", 1, 3, 1)
 
@@ -29,77 +44,81 @@ mcq_count = st.sidebar.slider("MCQs", 0, 20, 5)
 short_count = st.sidebar.slider("Short Questions", 0, 15, 3)
 long_count = st.sidebar.slider("Long Questions", 0, 10, 2)
 
-generate = st.sidebar.button("✨ Generate Question Paper")
+generate_btn = st.sidebar.button("✨ Generate Question Paper")
 
-# ------------------------------
-# Helper Functions
-# ------------------------------
+# ==============================
+# --- HELPER FUNCTIONS ---
+# ==============================
 
 def load_pdf_text(pdf_file):
-    with open(f"/tmp/{pdf_file.name}", "wb") as f:
+    temp_path = f"/tmp/{pdf_file.name}"
+    with open(temp_path, "wb") as f:
         f.write(pdf_file.read())
-    loader = PyPDFLoader(f"/tmp/{pdf_file.name}")
+    loader = PyPDFLoader(temp_path)
     pages = loader.load()
     return " ".join([p.page_content for p in pages])
 
 
 def extract_topics(syllabus_text):
-    # Simple heuristic: treat bullet lines / numbered lines as topics
     lines = syllabus_text.split("\n")
     topics = []
+
     for line in lines:
         line = line.strip()
         if len(line) > 5 and (
-            line.startswith("-") or 
+            line.startswith("-") or
             re.match(r"^\d+[\.\)]", line)
         ):
-            topics.append(re.sub(r"^\d+[\.\)]\s*", "", line))
+            topic = re.sub(r"^\d+[\.\)]\s*", "", line)
+            topics.append(topic)
+
     return list(set(topics))
 
 
-def calculate_frequency(topics, pyq_text):
-    freq = {}
-    for topic in topics:
-        freq[topic] = pyq_text.lower().count(topic.lower())
-    return freq
-
-
-def normalize(values_dict):
-    values = np.array(list(values_dict.values()))
+def normalize(dictionary):
+    values = np.array(list(dictionary.values()))
     max_val = max(values) if max(values) != 0 else 1
-    normalized = {k: v / max_val for k, v in values_dict.items()}
-    return normalized
+    return {k: v / max_val for k, v in dictionary.items()}
 
 
 def compute_priority(topics, syllabus_text, pyq_text):
-    # Approximate syllabus weight using topic length frequency
     syllabus_counts = {t: syllabus_text.lower().count(t.lower()) for t in topics}
-    freq_counts = calculate_frequency(topics, pyq_text)
+    pyq_counts = {t: pyq_text.lower().count(t.lower()) for t in topics}
 
     S_norm = normalize(syllabus_counts)
-    F_norm = normalize(freq_counts)
+    F_norm = normalize(pyq_counts)
 
-    priority = {}
+    priority_scores = {}
+
     for t in topics:
-        priority[t] = 0.6 * S_norm[t] + 0.4 * F_norm[t]
+        priority_scores[t] = 0.6 * S_norm[t] + 0.4 * F_norm[t]
 
-    # Sort by priority
-    sorted_topics = sorted(priority.items(), key=lambda x: x[1], reverse=True)
+    sorted_topics = sorted(priority_scores.items(), key=lambda x: x[1], reverse=True)
 
-    return sorted_topics[:8]  # Top 8 important topics
+    return sorted_topics[:8]  # top 8 important topics
 
 
-# ------------------------------
-# Main Generation Logic
-# ------------------------------
+def generate_with_groq(prompt):
+    response = client.chat.completions.create(
+        model="llama3-70b-8192",
+        messages=[
+            {"role": "system", "content": "You are an expert university examiner."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.7,
+        max_tokens=2000,
+    )
+    return response.choices[0].message.content
+
+
+# ==============================
+# --- MAIN GENERATION LOGIC ---
+# ==============================
 
 def generate_question_paper():
-    if not syllabus_file:
-        st.error("Upload syllabus PDF.")
-        return
 
-    if not HF_TOKEN:
-        st.error("HF_TOKEN not set.")
+    if not syllabus_file:
+        st.error("❌ Please upload syllabus PDF.")
         return
 
     with st.spinner("📘 Reading syllabus..."):
@@ -107,63 +126,64 @@ def generate_question_paper():
 
     pyq_text = ""
     if pyq_files:
-        with st.spinner("📚 Reading PYQs..."):
+        with st.spinner("📚 Reading Previous Year Papers..."):
             for f in pyq_files:
                 pyq_text += load_pdf_text(f)
 
     topics = extract_topics(syllabus_text)
 
     if len(topics) == 0:
-        st.warning("Could not extract topics automatically.")
+        st.error("❌ Could not extract topics automatically. Please format syllabus clearly.")
         return
 
     important_topics = compute_priority(topics, syllabus_text, pyq_text)
 
-    st.subheader("🔥 Top Important Topics (AI Selected)")
-    for topic, score in important_topics:
-        st.write(f"{topic} — Score: {round(score,2)}")
+    st.subheader("🔥 AI-Selected Important Topics")
 
-    topic_list = "\n".join([t[0] for t in important_topics])
+    for topic, score in important_topics:
+        st.write(f"**{topic}** — Importance Score: {round(score, 2)}")
+
+    topic_list = "\n".join([f"- {t[0]}" for t in important_topics])
 
     outputs = []
 
     for set_num in range(1, num_sets + 1):
-        prompt = f"""
-You are an expert examiner.
 
-IMPORTANT TOPICS (High Priority):
+        st.info(f"Generating Set {set_num}/{num_sets}...")
+
+        prompt = f"""
+Create a formal university question paper.
+
+IMPORTANT HIGH-PRIORITY TOPICS:
 {topic_list}
 
-Generate Question Paper - SET {set_num}
+Exam Structure:
+- MCQs: {mcq_count}
+- Short Questions: {short_count}
+- Long Questions: {long_count}
 
-MCQs: {mcq_count}
-Short: {short_count}
-Long: {long_count}
-
-Ensure:
-- More questions from higher priority topics
-- Balanced coverage
-- Formal exam format
+Rules:
+- Allocate more questions to higher priority topics.
+- Maintain balanced coverage.
+- Professional formatting.
+- Include answer key for MCQs.
+- Start with "QUESTION PAPER - SET {set_num}"
+- Do not add explanations outside exam format.
 """
 
-        response = client.chat_completion(
-            messages=[{"role": "user", "content": prompt}],
-            model="meta-llama/Llama-3.2-3B-Instruct",
-            max_tokens=2000,
-            temperature=0.7,
-        )
+        paper = generate_with_groq(prompt)
+        outputs.append(paper)
 
-        outputs.append(response.choices[0].message.content)
-
-    return "\n\n" + "="*80 + "\n\n".join(outputs)
+    return "\n\n" + "="*100 + "\n\n".join(outputs)
 
 
-# ------------------------------
-# Output
-# ------------------------------
+# ==============================
+# --- OUTPUT SECTION ---
+# ==============================
 
-if generate:
-    result = generate_question_paper()
-    if result:
-        st.success("✅ Generation Complete!")
-        st.markdown(result)
+if generate_btn:
+    with st.spinner("🤖 AI Generating Question Paper..."):
+        result = generate_question_paper()
+        if result:
+            st.success("✅ Question Paper Generated Successfully!")
+            st.markdown(result)
