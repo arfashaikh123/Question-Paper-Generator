@@ -52,26 +52,34 @@ generate_button = st.sidebar.button("🚀 Generate Paper")
 def parse_and_clean_syllabus(raw_text):
 
     topics = {}
+    lines = raw_text.split("\n")
 
-    text = raw_text.replace("–", "-")
-    text = re.sub(r"\s+", " ", text)
+    ignore_words = ["module", "content", "hrs", "hr", "hours"]
 
-    pattern1 = r"([A-Za-z &]+)\s*\(\s*(\d+)\s*(?:hours|hrs|Hrs|Hours)?\s*\)"
-    pattern2 = r"([A-Za-z &]+)\s*[-:]\s*(\d+)"
-    pattern3 = r"([A-Za-z &]+)\s+(\d+)"
+    for i in range(len(lines) - 1):
 
-    matches = re.findall(pattern1, text, re.IGNORECASE)
-    matches += re.findall(pattern2, text, re.IGNORECASE)
-    matches += re.findall(pattern3, text, re.IGNORECASE)
+        line = lines[i].strip()
+        next_line = lines[i + 1].strip()
 
-    for topic, hrs in matches:
-        topic_clean = re.sub(r"(Module|Unit)\s*\d+", "", topic, flags=re.IGNORECASE)
-        topic_clean = topic_clean.strip()
+        # Skip empty lines
+        if not line or not next_line:
+            continue
 
-        if len(topic_clean) > 3:
-            topics[topic_clean] = int(hrs)
+        # Skip structural words
+        if any(word in line.lower() for word in ignore_words):
+            continue
+
+        # If next line is purely a number (hours)
+        if next_line.isdigit():
+
+            hours = int(next_line)
+
+            # Only accept reasonable hour values
+            if 1 <= hours <= 20 and len(line) > 5:
+                topics[line] = hours
 
     return topics
+
 
 # =====================================================
 # PDF TEXT EXTRACTION
