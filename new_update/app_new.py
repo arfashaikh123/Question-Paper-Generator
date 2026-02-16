@@ -168,7 +168,7 @@ Rules:
         with st.spinner(f"✍️ Generating Set {set_num}..."):
 
             response = client.chat.completions.create(
-                model="llama3-8b-8192",
+                model="llama-3.1-70b-versatile",
                 messages=[
                     {"role": "system", "content": "You are an expert academic examiner."},
                     {"role": "user", "content": prompt}
