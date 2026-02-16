@@ -86,11 +86,12 @@ def download_pdf():
     try:
         data = request.json
         text_content = data.get('text_content')
+        college_name = data.get('college_name', 'COLLEGE OF ENGINEERING') # Default if empty
         
         if not text_content:
             return jsonify({"error": "No content provided"}), 400
             
-        pdf_bytes = create_pdf(text_content)
+        pdf_bytes = create_pdf(text_content, college_name)
         
         # Save to temp file to send
         temp_pdf_path = os.path.join(tempfile.gettempdir(), "generated_paper.pdf")

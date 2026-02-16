@@ -1,25 +1,72 @@
 from fpdf import FPDF
+import re
 
-def create_pdf(text):
-    pdf = FPDF()
+class PDF(FPDF):
+    def __init__(self, college_name="COLLEGE OF ENGINEERING"):
+        super().__init__()
+        self.college_name = college_name
+
+    def header(self):
+        # Logo placeholder (optional, skipping for now)
+        # Font for Header
+        self.set_font('Arial', 'B', 16)
+        # College Name
+        self.cell(0, 10, self.college_name.upper(), 0, 1, 'C')
+        
+        self.set_font('Arial', 'B', 12)
+        self.cell(0, 8, "EXAMINATION - 202X", 0, 1, 'C')
+        
+        # Line break
+        self.set_line_width(0.5)
+        self.line(10, 28, 200, 28)
+        self.ln(10)
+
+    def footer(self):
+        # Position at 1.5 cm from bottom
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        # Page number
+        self.cell(0, 10, 'Page ' + str(self.page_no()) + '/{nb}', 0, 0, 'C')
+
+def create_pdf(text, college_name="COLLEGE OF ENGINEERING"):
+    pdf = PDF(college_name=college_name)
+    pdf.alias_nb_pages()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     
-    # Title
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, "Generated Question Paper", ln=True, align='C')
-    pdf.ln(10)
-    
-    # Body
+    # Body Font
     pdf.set_font("Arial", size=11)
     
     # Improve text wrapping and encoding
     # FPDF has trouble with some utf-8 characters if not using a unicode font.
     # We'll use latin-1 encoding for simplicity or a replacement logic.
     
+    # Simple cleanup to fix common encoding issues
+    replacements = {
+        '\u2013': '-', '\u2014': '-', '\u2018': "'", '\u2019': "'",
+        '\u201c': '"', '\u201d': '"', '\u2022': '*'
+    }
+    for k, v in replacements.items():
+        text = text.replace(k, v)
+    
     normalized_text = text.encode('latin-1', 'replace').decode('latin-1')
     
-    for line in normalized_text.split("\n"):
-        pdf.multi_cell(0, 8, line)
+    # Processing Markdown-like headers for bolding
+    # e.g. ## Section A
+    
+    lines = normalized_text.split("\n")
+    for line in lines:
+        if line.startswith("##"):
+            pdf.set_font("Arial", "B", 13)
+            pdf.cell(0, 10, line.replace("#", "").strip(), 0, 1, 'L')
+            pdf.set_font("Arial", size=11)
+        elif line.startswith("**") and line.endswith("**"):
+             # Bold line
+            pdf.set_font("Arial", "B", 11)
+            pdf.multi_cell(0, 6, line.replace("*", "").strip())
+            pdf.set_font("Arial", size=11)
+        else:
+            pdf.multi_cell(0, 6, line)
+            pdf.ln(1) # Extra spacing
         
     return pdf.output(dest="S").encode("latin-1")

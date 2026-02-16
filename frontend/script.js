@@ -135,6 +135,47 @@ const loader = document.getElementById('loader');
 const loadingText = document.getElementById('loadingText');
 const paperOutput = document.getElementById('paperOutput');
 const paperContent = document.getElementById('paperContent');
+const patternContainer = document.getElementById('patternContainer');
+const addSectionBtn = document.getElementById('addSectionBtn');
+const collegeNameInput = document.getElementById('collegeName');
+
+// ==========================================
+// PATTERN MANAGEMENT
+// ==========================================
+function createPatternRow(data = {}) {
+    const div = document.createElement('div');
+    div.className = 'pattern-row';
+    div.innerHTML = `
+        <input type="text" placeholder="Section Name (e.g. Section A)" value="${data.name || ''}" class="p-name">
+        <input type="text" placeholder="Description (e.g. 10 MCQs)" value="${data.desc || ''}" class="p-desc">
+        <input type="number" placeholder="Marks/Q" value="${data.marks || ''}" class="p-marks">
+        <input type="number" placeholder="Total Qs" value="${data.total || ''}" class="p-total">
+        <input type="number" placeholder="Attempt" value="${data.attempt || ''}" class="p-attempt">
+        <button class="remove-btn" onclick="this.parentElement.remove()">×</button>
+    `;
+    patternContainer.appendChild(div);
+}
+
+addSectionBtn.addEventListener('click', () => createPatternRow());
+
+function getPatternFromUI() {
+    const rows = patternContainer.querySelectorAll('.pattern-row');
+    if (rows.length === 0) return null;
+
+    const pattern = {};
+    rows.forEach(row => {
+        const name = row.querySelector('.p-name').value.trim();
+        if (name) {
+            pattern[name] = {
+                description: row.querySelector('.p-desc').value.trim(),
+                marks_per_question: parseInt(row.querySelector('.p-marks').value) || 1,
+                total_questions: parseInt(row.querySelector('.p-total').value) || 1,
+                questions_to_attempt: parseInt(row.querySelector('.p-attempt').value) || 1
+            };
+        }
+    });
+    return Object.keys(pattern).length > 0 ? pattern : null;
+}
 
 // 1. Analyze Handler
 analyzeBtn.addEventListener('click', async () => {
@@ -191,6 +232,26 @@ analyzeBtn.addEventListener('click', async () => {
             document.getElementById('priorityCount').textContent = Object.keys(data.priority_scores).length + " Priorities";
         }
 
+        if (data.paper_pattern) {
+            document.getElementById('priorityCount').innerHTML = `<span style="color:#00f3ff">Pattern Detected</span>`;
+
+            // Populate Form
+            patternContainer.innerHTML = '';
+            for (const [section, details] of Object.entries(data.paper_pattern)) {
+                createPatternRow({
+                    name: section,
+                    desc: details.description,
+                    marks: details.marks_per_question,
+                    total: details.total_questions,
+                    attempt: details.questions_to_attempt
+                });
+            }
+        } else {
+            document.getElementById('priorityCount').textContent = Object.keys(data.priority_scores).length + " Priorities";
+            // Clear or add default? Let's clear
+            patternContainer.innerHTML = '';
+        }
+
         resultsSection.classList.remove('hidden');
     } catch (err) {
         alert("Analysis Failed: " + err.message);
@@ -211,6 +272,10 @@ generateBtn.addEventListener('click', async () => {
     loader.classList.remove('hidden');
     loadingText.textContent = "Generating Question Paper...";
 
+    // Get Pattern from UI (overrides analysis data)
+    const uiPattern = getPatternFromUI();
+    const finalPattern = uiPattern || analysisData.paper_pattern;
+
     try {
         const response = await fetch(`${apiBase}/generate`, {
             method: 'POST',
@@ -218,7 +283,7 @@ generateBtn.addEventListener('click', async () => {
             body: JSON.stringify({
                 api_key: document.getElementById('apiKey').value,
                 allocation: analysisData.default_allocation,
-                paper_pattern: analysisData.paper_pattern,
+                paper_pattern: finalPattern,
                 priority_scores: analysisData.priority_scores
             })
         });
@@ -241,11 +306,16 @@ downloadPdfBtn.addEventListener('click', async () => {
     const text = paperContent.textContent;
     if (!text) return;
 
+    const collegeName = collegeNameInput.value.trim();
+
     try {
         const response = await fetch(`${apiBase}/download-pdf`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text_content: text })
+            body: JSON.stringify({
+                text_content: text,
+                college_name: collegeName
+            })
         });
 
         if (!response.ok) throw new Error("Download failed");
