@@ -1,0 +1,8 @@
+streamlit
+numpy
+langchain-community
+langchain-text-splitters
+pypdf
+fastembed
+faiss-cpu
+huggingface-hub

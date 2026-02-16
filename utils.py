@@ -2,7 +2,7 @@
 import os
 import re
 import json
-from PyPDF2 import PdfReader
+import fitz  # PyMuPDF
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from collections import Counter
@@ -11,14 +11,23 @@ from collections import Counter
 
 def extract_text_from_pdf(pdf_file, api_key=None, use_ocr_fallback=False) -> str:
     """
-    Extracts text from a PDF file using PyPDF2.
+    Extracts text from a PDF file using PyMuPDF (fitz).
+    More robust than PyPDF2 for complex layouts and fonts.
     """
     try:
-        reader = PdfReader(pdf_file)
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text() + "\n"
-        return text
+        # Check if file pointer or bytes (Streamlit UploadedFile)
+        if hasattr(pdf_file, "read"):
+            pdf_file.seek(0)
+            file_bytes = pdf_file.read()
+            doc = fitz.open(stream=file_bytes, filetype="pdf")
+        else:
+            doc = fitz.open(pdf_file)
+            
+        full_text = ""
+        for page in doc:
+            full_text += page.get_text() + "\n"
+            
+        return full_text
     except Exception as e:
         return f"Error reading PDF: {e}"
 
