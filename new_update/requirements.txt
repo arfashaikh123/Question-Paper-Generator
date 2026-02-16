@@ -6,3 +6,4 @@ pypdf
 fastembed
 faiss-cpu
 huggingface-hub
+groq
