@@ -3,6 +3,7 @@ import re
 from collections import defaultdict
 from groq import Groq
 from langchain_community.document_loaders import PyPDFLoader
+from fpdf import FPDF
 
 # =====================================================
 # PAGE CONFIG
@@ -23,14 +24,21 @@ groq_key = st.sidebar.text_input("Enter Groq API Key", type="password")
 st.sidebar.header("📚 Paste Syllabus Text")
 
 syllabus_text_input = st.sidebar.text_area(
-    "Paste syllabus topics with hours",
+    "Paste syllabus topics (hours must be mentioned)",
     height=250,
     placeholder="""
-Module 1: Introduction to Statistics (6 Hours)
-Module 2 - Data Collection & Sampling Methods – 6 Hrs
-Introduction to Regression 8
-Statistical inference (6)
-Tests of hypotheses - 5
+Introduction to Statistics
+6
+Data Collection & Sampling Methods
+6
+Introduction to Regression
+8
+Introduction to Multiple Linear Regression
+8
+Statistical inference
+6
+Tests of hypotheses
+5
 """
 )
 
@@ -46,40 +54,41 @@ total_questions = st.sidebar.slider("Total Questions", 5, 30, 10)
 generate_button = st.sidebar.button("🚀 Generate Paper")
 
 # =====================================================
-# SYLLABUS AUTO PARSER
+# STRICT SYLLABUS PARSER
 # =====================================================
 
 def parse_and_clean_syllabus(raw_text):
 
     topics = {}
-    lines = raw_text.split("\n")
+    lines = [line.strip() for line in raw_text.split("\n") if line.strip()]
 
     ignore_words = ["module", "content", "hrs", "hr", "hours"]
 
     for i in range(len(lines) - 1):
 
-        line = lines[i].strip()
-        next_line = lines[i + 1].strip()
-
-        # Skip empty lines
-        if not line or not next_line:
-            continue
+        line = lines[i]
+        next_line = lines[i + 1]
 
         # Skip structural words
         if any(word in line.lower() for word in ignore_words):
             continue
 
-        # If next line is purely a number (hours)
+        # Skip if line is numeric (serial number)
+        if line.isdigit():
+            continue
+
+        # Next line must be numeric
         if next_line.isdigit():
 
             hours = int(next_line)
 
-            # Only accept reasonable hour values
-            if 1 <= hours <= 20 and len(line) > 5:
-                topics[line] = hours
+            # Accept realistic teaching hours only
+            if 4 <= hours <= 12:
+
+                if len(line) > 5 and any(c.isalpha() for c in line):
+                    topics[line] = hours
 
     return topics
-
 
 # =====================================================
 # PDF TEXT EXTRACTION
@@ -123,6 +132,22 @@ def allocate_questions(priority_scores, total_q):
     return allocation
 
 # =====================================================
+# PDF GENERATOR
+# =====================================================
+
+def generate_pdf(text):
+
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=10)
+    pdf.add_page()
+    pdf.set_font("Arial", size=11)
+
+    for line in text.split("\n"):
+        pdf.multi_cell(0, 8, line)
+
+    return pdf.output(dest="S").encode("latin-1")
+
+# =====================================================
 # MAIN PIPELINE
 # =====================================================
 
@@ -148,7 +173,7 @@ if generate_button:
     syllabus_topics = parse_and_clean_syllabus(syllabus_text_input)
 
     if not syllabus_topics:
-        st.error("Could not detect topics automatically. Make sure hours are mentioned.")
+        st.error("Could not detect topics automatically. Check syllabus format.")
         st.stop()
 
     st.subheader("📚 Extracted Syllabus Topics")
@@ -180,7 +205,7 @@ Respond ONLY with topic name.
 """
 
                     response = client.chat.completions.create(
-                        model="llama-3.1-8b-instant",
+                        model="llama-3.3-8b-instant",
                         messages=[{"role": "user", "content": prompt}],
                         temperature=0,
                         max_tokens=50
@@ -231,7 +256,7 @@ Rules:
 """
 
             response = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model="llama-3.3-8b-instant",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.8,
                 max_tokens=800
@@ -239,4 +264,25 @@ Rules:
 
             final_questions.append(response.choices[0].message.content)
 
-    st.markdown("\n\n".join(final_questions))
+    final_output = "\n\n".join(final_questions)
+
+    st.markdown(final_output)
+
+    # -----------------------------
+    # Download Buttons
+    # -----------------------------
+    st.download_button(
+        label="📥 Download as TXT",
+        data=final_output,
+        file_name="Generated_Question_Paper.txt",
+        mime="text/plain"
+    )
+
+    pdf_data = generate_pdf(final_output)
+
+    st.download_button(
+        label="📥 Download as PDF",
+        data=pdf_data,
+        file_name="Generated_Question_Paper.pdf",
+        mime="application/pdf"
+    )
