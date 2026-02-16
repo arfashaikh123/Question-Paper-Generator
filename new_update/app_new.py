@@ -1,28 +1,29 @@
 import streamlit as st
+from groq import Groq
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from langchain_community.vectorstores import FAISS
-from huggingface_hub import InferenceClient
 
 # =====================================================
 # PAGE CONFIG
 # =====================================================
 
-st.set_page_config(page_title="AI Question Paper Generator", layout="wide")
+st.set_page_config(page_title="AI Question Paper Generator (Groq)", layout="wide")
+
 st.title("📄 AI Question Paper Generator")
-st.markdown("Powered by Hugging Face Llama 3.2")
+st.markdown("Powered by Groq • Llama 3")
 
 # =====================================================
-# SIDEBAR - TOKEN INPUT
+# SIDEBAR - GROQ API INPUT
 # =====================================================
 
-st.sidebar.header("🔐 Hugging Face Configuration")
+st.sidebar.header("🔐 Groq API Configuration")
 
-hf_token = st.sidebar.text_input(
-    "Enter Hugging Face Token",
+groq_api_key = st.sidebar.text_input(
+    "Enter Groq API Key",
     type="password",
-    help="Get your token from https://huggingface.co/settings/tokens"
+    help="Get your key from https://console.groq.com"
 )
 
 # =====================================================
@@ -65,8 +66,8 @@ generate_button = st.sidebar.button("🚀 Generate Question Paper")
 
 def generate_question_paper():
 
-    if not hf_token:
-        st.error("❌ Please enter Hugging Face token.")
+    if not groq_api_key:
+        st.error("❌ Please enter Groq API key.")
         return
 
     if not pdf_files:
@@ -82,12 +83,16 @@ def generate_question_paper():
         st.error("❌ Please select at least one question.")
         return
 
-    # Initialize HF client
+    # Initialize Groq client
     try:
-        client = InferenceClient(token=hf_token)
+        client = Groq(api_key=groq_api_key)
     except Exception as e:
-        st.error(f"❌ Invalid Token: {str(e)}")
+        st.error(f"❌ Invalid Groq API Key: {str(e)}")
         return
+
+    # -------------------------------------------------
+    # Load PDFs
+    # -------------------------------------------------
 
     with st.spinner("📄 Loading PDFs..."):
 
@@ -102,7 +107,11 @@ def generate_question_paper():
             pages = loader.load()
             all_pages.extend(pages)
 
-    with st.spinner("✂️ Splitting text..."):
+    # -------------------------------------------------
+    # Split Text
+    # -------------------------------------------------
+
+    with st.spinner("✂️ Splitting text into chunks..."):
 
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
@@ -110,18 +119,30 @@ def generate_question_paper():
         )
         chunks = splitter.split_documents(all_pages)
 
+    # -------------------------------------------------
+    # Create Vector Store
+    # -------------------------------------------------
+
     with st.spinner("🧠 Creating vector database..."):
 
         embeddings = FastEmbedEmbeddings()
         vector_store = FAISS.from_documents(chunks, embeddings)
 
-    with st.spinner("🔍 Retrieving important context..."):
+    # -------------------------------------------------
+    # Retrieve Important Context
+    # -------------------------------------------------
+
+    with st.spinner("🔍 Retrieving important concepts..."):
 
         retriever = vector_store.as_retriever(search_kwargs={"k": 10})
         context_docs = retriever.invoke("Key concepts and important topics")
         context_text = "\n\n".join([doc.page_content for doc in context_docs])
 
     outputs = []
+
+    # -------------------------------------------------
+    # Generate Question Papers
+    # -------------------------------------------------
 
     for set_num in range(1, num_sets + 1):
 
@@ -137,17 +158,23 @@ MCQs: {mcq_count} ({mcq_difficulty})
 Short Questions: {short_count} ({short_difficulty})
 Long Questions: {long_count} ({long_difficulty})
 
-Format properly.
-Do not include explanations.
+Rules:
+- Professional formatting
+- Number all questions properly
+- Include answer key for MCQs
+- Do not add explanations outside exam format
 """
 
         with st.spinner(f"✍️ Generating Set {set_num}..."):
 
-            response = client.chat_completion(
-                messages=[{"role": "user", "content": prompt}],
-                model="meta-llama/Llama-3.2-3B-Instruct",
-                max_tokens=2000,
+            response = client.chat.completions.create(
+                model="llama3-8b-8192",
+                messages=[
+                    {"role": "system", "content": "You are an expert academic examiner."},
+                    {"role": "user", "content": prompt}
+                ],
                 temperature=0.7,
+                max_tokens=1200,
             )
 
             generated_text = response.choices[0].message.content
