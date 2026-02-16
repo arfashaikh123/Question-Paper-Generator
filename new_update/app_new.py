@@ -8,6 +8,7 @@ from langchain_community.vectorstores import FAISS
 from sklearn.metrics.pairwise import cosine_similarity
 import re
 from collections import defaultdict
+import pdfplumber
 
 # ============================================================
 # PAGE CONFIG
@@ -48,31 +49,33 @@ def extract_text_from_pdf(pdf_file):
     pages = loader.load()
     return "\n".join([p.page_content for p in pages])
 
-def extract_topics_from_syllabus(text):
+def extract_topics_from_syllabus(pdf_file):
 
     topics = {}
-    lines = text.split("\n")
 
-    for i in range(len(lines)):
-        line = lines[i].strip()
+    with pdfplumber.open(pdf_file) as pdf:
+        for page in pdf.pages:
+            tables = page.extract_tables()
 
-        # Detect module number at beginning
-        if re.match(r"^\d+\s", line):
+            for table in tables:
+                # Expecting columns: Module | Content | Hrs
+                for row in table:
+                    if row and len(row) >= 3:
 
-            parts = re.split(r"\s{2,}", line)
+                        module = row[0]
+                        content = row[1]
+                        hrs = row[2]
 
-            if len(parts) >= 2:
-                topic_part = parts[1]
+                        # Skip header row
+                        if content and hrs and content.lower() != "content":
 
-                # Try to extract hours from next lines
-                if i + 1 < len(lines):
-                    next_line = lines[i + 1]
-                    hrs_match = re.search(r"\b(\d+)\b", next_line)
-
-                    if hrs_match:
-                        topics[topic_part.strip()] = int(hrs_match.group(1))
+                            try:
+                                topics[content.strip()] = int(str(hrs).strip())
+                            except:
+                                pass
 
     return topics
+
 
 
 def classify_question_topic(client, question, topics):
@@ -144,8 +147,8 @@ if generate_button:
     # ========================================================
 
     with st.spinner("📘 Extracting syllabus topics..."):
-        syllabus_text = extract_text_from_pdf(syllabus_pdf)
-        syllabus_topics = extract_topics_from_syllabus(syllabus_text)
+        syllabus_topics = extract_topics_from_syllabus(syllabus_pdf)
+
 
     if not syllabus_topics:
         st.error("Could not extract topics automatically. Adjust syllabus format.")

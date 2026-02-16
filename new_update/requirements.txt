@@ -7,3 +7,4 @@ fastembed
 pypdf
 numpy
 scikit-learn
+pdfplumber
