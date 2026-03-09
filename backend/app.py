@@ -12,8 +12,7 @@ chat_agent = ChatAgent()
 
 # --- CONFIGURATION ---
 # TODO: Replace with your actual Groq API Key
-GROQ_API_KEY = "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" 
-
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
