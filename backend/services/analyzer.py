@@ -1,14 +1,57 @@
 import re
 import os
+import json
 from collections import defaultdict
 from langchain_community.document_loaders import PyPDFLoader
 from groq import Groq
 
-def parse_and_clean_syllabus(raw_text):
+def parse_and_clean_syllabus(raw_text, api_key=None):
     """
     Parses raw syllabus text to extract Topic -> Hours mapping.
-    Expects format: Module No -> Topic -> Hours (on separate lines)
+    Uses Groq LLM as the primary parser for robust extraction from any syllabus format.
+    Falls back to pattern-based parsing if no API key is provided or LLM fails.
     """
+    # 1. Groq-based parsing (primary)
+    # Uses llama-3.1-8b-instant for low-latency responses in the backend API context.
+    if api_key:
+        try:
+            client = Groq(api_key=api_key)
+            prompt = f"""You are a precise data extraction assistant. Analyze the following syllabus text and extract all module/unit names and their teaching hours.
+
+Syllabus Text:
+{raw_text[:20000]}
+
+Instructions:
+1. Identify all modules, units, or topics along with their allocated teaching hours.
+2. Look for patterns like "Module 1: Topic Name (10 Hours)", "Unit 3 ... 8 Hrs", or tables with topics and hours.
+3. If hours are not explicitly mentioned, estimate based on content length or marks distribution. Assign an integer (e.g., 5, 10).
+4. Ignore trivial sections like "References", "Outcomes", "Textbooks", or "Prerequisites".
+5. Return ONLY valid JSON with no markdown formatting, no code blocks, and no explanation.
+
+Output format:
+{{"Module/Topic Name": integer_hours}}
+Example: {{"Introduction to Data Structures": 8, "Sorting Algorithms": 12, "Graph Theory": 10}}"""
+
+            response = client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0,
+                max_tokens=1500,
+                response_format={"type": "json_object"}
+            )
+            content = response.choices[0].message.content.strip()
+            topics = json.loads(content)
+            # Validate: ensure values are positive numbers and keys are non-empty strings
+            rejected = {k: v for k, v in topics.items() if not (k and isinstance(v, (int, float)) and v > 0)}
+            if rejected:
+                print(f"Groq syllabus parsing: skipped invalid entries: {rejected}")
+            topics = {k: int(v) for k, v in topics.items() if k and isinstance(v, (int, float)) and v > 0}
+            if topics:
+                return topics
+        except Exception as e:
+            print(f"Groq syllabus parsing failed: {e}. Falling back to pattern-based parsing.")
+
+    # 2. Pattern-based fallback
     topics = {}
     lines = [line.strip() for line in raw_text.split("\n") if line.strip()]
 
@@ -20,7 +63,7 @@ def parse_and_clean_syllabus(raw_text):
                 hours = int(hrs_line)
                 # Filtering logic
                 if 2 <= hours <= 20 and len(topic) > 3:
-                     topics[topic] = hours
+                    topics[topic] = hours
     return topics
 
 def extract_text_from_pdf(file_path):
@@ -62,9 +105,9 @@ def analyze_syllabus_and_pyqs(syllabus_text, pyq_paths, api_key, reference_text=
     client = Groq(api_key=api_key)
     
     # 1. Parse Syllabus
-    syllabus_topics = parse_and_clean_syllabus(syllabus_text)
+    syllabus_topics = parse_and_clean_syllabus(syllabus_text, api_key=api_key)
     if not syllabus_topics:
-        raise ValueError("Could not parse syllabus. Format expected: ModuleNum \n Topic \n Hours")
+        raise ValueError("Could not parse syllabus. Please ensure the syllabus contains module/topic names and teaching hours.")
 
     # 2. Analyze PYQs
     frequency = defaultdict(int)
@@ -197,7 +240,6 @@ def extract_paper_pattern(text, api_key):
             response_format={"type": "json_object"}
         )
 
-        import json
         return json.loads(response.choices[0].message.content)
     except Exception as e:
         print(f"Pattern Extraction Failed: {e}")
