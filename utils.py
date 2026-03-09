@@ -73,25 +73,14 @@ def extract_pattern_from_text(text: str, api_key: str) -> str:
 def parse_syllabus_modules(text: str, api_key: str = None) -> dict:
     """
     Parses syllabus text to find 'Module: Hours' mapping.
-    1. Tries Regex first (fast).
-    2. If Regex fails and api_key is provided, uses LLM (smart).
+    1. Tries Groq LLM first (smart, handles any syllabus format).
+    2. Falls back to Regex if LLM fails or no api_key is provided.
     """
     modules = {}
-    lines = text.split('\n')
-    
-    # 1. Regex Approach
-    for line in lines:
-        match = re.search(r'(\d+)\s*(?:Hours|Hrs)', line, re.IGNORECASE)
-        if match:
-            hours = int(match.group(1))
-            topic_part = line[:match.start()].strip()
-            topic_name = re.sub(r'^[\d\.\s]+', '', topic_part)
-            
-            if len(topic_name) > 3 and hours > 0:
-                modules[topic_name] = hours
-    
-    # 2. LLM Fallback (Enhanced)
-    if not modules and api_key:
+
+    # 1. Groq-based parsing (primary, if api_key provided)
+    # Uses llama-3.3-70b-versatile for higher accuracy in the Streamlit app context.
+    if api_key:
         try:
             llm = ChatGroq(temperature=0, model_name="llama-3.3-70b-versatile", api_key=api_key)
             prompt = ChatPromptTemplate.from_messages([
@@ -113,21 +102,33 @@ def parse_syllabus_modules(text: str, api_key: str = None) -> dict:
                 """)
             ])
             chain = prompt | llm
-            # Use a larger context window if needed, but 15k chars is usually enough for syllabus
-            response = chain.invoke({"text": text[:20000]}) 
+            response = chain.invoke({"text": text[:20000]})
             content = response.content.strip()
-            
+
             # Clean up potential markdown wrapping
             if "```" in content:
                 content = content.split("```")[1].replace("json", "").strip()
             elif "{" not in content:
-                 # fallback if model chatters
-                 raise Exception("Invalid JSON format")
-                 
+                raise Exception("Invalid JSON format")
+
             modules = json.loads(content)
+            if modules:
+                return modules
         except Exception as e:
-            print(f"LLM Syllabus Parsing failed: {e}")
-            
+            print(f"Groq Syllabus Parsing failed: {e}. Falling back to regex.")
+
+    # 2. Regex fallback
+    lines = text.split('\n')
+    for line in lines:
+        match = re.search(r'(\d+)\s*(?:Hours|Hrs)', line, re.IGNORECASE)
+        if match:
+            hours = int(match.group(1))
+            topic_part = line[:match.start()].strip()
+            topic_name = re.sub(r'^[\d\.\s]+', '', topic_part)
+
+            if len(topic_name) > 3 and hours > 0:
+                modules[topic_name] = hours
+
     return modules
 
 # --- 4. Weightage Calculation ---
