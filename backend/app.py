@@ -1,12 +1,14 @@
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import os
+import sys
 import tempfile
 from werkzeug.utils import secure_filename
 from services.analyzer import analyze_syllabus_and_pyqs, extract_text_from_pdf
 from services.generator import generate_paper_content
 from services.pdf_maker import create_pdf
 from services.chat_agent import ChatAgent
+from services.llm_client import PROVIDERS
 
 chat_agent = ChatAgent()
 
@@ -27,7 +29,7 @@ def analyze():
         model = data.get('model') or None
         base_url = data.get('base_url') or None
         
-        if not syllabus_text or (not api_key and provider == 'groq'):
+        if not syllabus_text or (not api_key and PROVIDERS.get(provider, {}).get("requires_api_key", False)):
             return jsonify({"error": "Missing syllabus text or API key"}), 400
         
         pyq_files = request.files.getlist('pyq_files')
@@ -89,7 +91,7 @@ def generate():
         paper_pattern = data.get('paper_pattern')
         priority_scores = data.get('priority_scores')
         
-        if not api_key and provider == 'groq':
+        if not api_key and PROVIDERS.get(provider, {}).get("requires_api_key", False):
             return jsonify({"error": "Missing API key"}), 400
             
         # Generate Text Content
@@ -173,7 +175,7 @@ def chat():
         model = data.get('model') or None
         base_url = data.get('base_url') or None
         
-        if (not api_key and provider == 'groq') or not message:
+        if (not api_key and PROVIDERS.get(provider, {}).get("requires_api_key", False)) or not message:
             return jsonify({"error": "Missing API key or message"}), 400
             
         response = chat_agent.process_message(

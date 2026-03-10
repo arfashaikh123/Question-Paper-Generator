@@ -5,7 +5,7 @@ import json
 import fitz  # PyMuPDF
 from langchain_core.prompts import ChatPromptTemplate
 from collections import Counter
-from llm_providers import get_langchain_llm, DEFAULT_PROVIDER
+from llm_providers import get_langchain_llm, DEFAULT_PROVIDER, PROVIDERS
 
 # --- 1. Text Extraction (OCR / PDF Reading) ---
 
@@ -47,7 +47,7 @@ def extract_pattern_from_text(
     The provider, model, and base_url parameters let you swap Groq for any
     local or custom-hosted model (e.g. Ollama or a fine-tuned model).
     """
-    if not api_key and provider == "groq":
+    if not api_key and PROVIDERS.get(provider, {}).get("requires_api_key", False):
         return "Error: API Key missing."
 
     llm = get_langchain_llm(
@@ -102,8 +102,8 @@ def parse_syllabus_modules(
     """
     modules = {}
 
-    # 1. LLM-based parsing (primary, if api_key or provider doesn't need one)
-    if api_key or provider != "groq":
+    # 1. LLM-based parsing (primary, if api_key or provider doesn't require one)
+    if api_key or not PROVIDERS.get(provider, {}).get("requires_api_key", False):
         try:
             llm = get_langchain_llm(
                 provider=provider,
@@ -217,7 +217,7 @@ def generate_question_paper(
     The provider, model, and base_url parameters let you swap Groq for any
     local or custom-hosted model (e.g. Ollama or a fine-tuned model).
     """
-    if not api_key and provider == "groq":
+    if not api_key and PROVIDERS.get(provider, {}).get("requires_api_key", False):
         return "Error: API Key missing."
         
     # Prepare High Priority Topics String

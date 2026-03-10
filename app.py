@@ -44,14 +44,17 @@ st.sidebar.caption(provider_config["description"])
 # API Key (only shown for providers that need one)
 api_key = ""
 if provider_config["requires_api_key"]:
-    api_key = st.sidebar.text_input(
-        f"{selected_provider_name} API Key", type="password"
+    key_label = (
+        "Hugging Face Token"
+        if provider == "huggingface_hub"
+        else f"{selected_provider_name} API Key"
     )
-    env_var = "GROQ_API_KEY" if provider == "groq" else "LLM_API_KEY"
+    api_key = st.sidebar.text_input(key_label, type="password")
+    env_var = "GROQ_API_KEY" if provider == "groq" else "HF_TOKEN" if provider == "huggingface_hub" else "LLM_API_KEY"
     if not api_key and env_var in os.environ:
         api_key = os.environ[env_var]
     if not api_key:
-        st.sidebar.warning(f"Please enter your {selected_provider_name} API Key to proceed.")
+        st.sidebar.warning(f"Please enter your {key_label} to proceed.")
 else:
     # Providers like Ollama and custom servers may optionally require a key
     api_key = st.sidebar.text_input(
@@ -59,32 +62,93 @@ else:
         help="Leave blank if the server does not require authentication."
     )
 
-# Base URL (shown for Ollama and custom providers, editable for Groq too)
-default_base_url = provider_config["base_url"]
-if provider in ("ollama", "openai_compatible"):
+# Model / path input
+if provider == "local_transformers":
+    # Local transformers needs a model path or HF model ID, not a base URL
+    base_url = None
+    model = st.sidebar.text_input(
+        "Model Path or HF Model ID",
+        value="",
+        help=(
+            "Path to your fine-tuned model folder on disk "
+            "(e.g. /models/my-llm) **or** a Hugging Face model ID "
+            "(e.g. username/my-finetuned-llama). "
+            "The model must be compatible with the 🤗 text-generation pipeline."
+        ),
+    )
+    if not model:
+        st.sidebar.warning("Enter a local model path or HF model ID to proceed.")
+
+elif provider in ("ollama", "openai_compatible"):
     base_url = st.sidebar.text_input(
         "Base URL",
-        value=default_base_url,
+        value=provider_config["base_url"],
         help="The base URL of the model server (e.g., http://localhost:11434/v1).",
     )
-else:
-    base_url = default_base_url  # Use Groq's default
-
-# Model selection
-if provider_config["models"]:
-    model = st.sidebar.selectbox(
-        "Model",
-        provider_config["models"],
-        index=0,
-        help="Select the model to use for generation.",
-    )
-else:
     model = st.sidebar.text_input(
         "Model Name",
         value=provider_config["default_model"],
         help="Enter the exact model name supported by your server "
              "(e.g., llama3.2, mistral, or your fine-tuned model name).",
     )
+
+elif provider == "huggingface_hub":
+    base_url = provider_config["base_url"]  # Fixed HF endpoint
+    model = st.sidebar.text_input(
+        "HF Model ID",
+        value="",
+        help=(
+            "The full Hugging Face model ID, e.g. 'username/my-finetuned-llama'. "
+            "Must be a model that supports text generation and is accessible "
+            "with your HF token."
+        ),
+    )
+    if not model:
+        st.sidebar.warning("Enter your Hugging Face model ID to proceed.")
+
+else:  # groq
+    base_url = provider_config["base_url"]
+    model = st.sidebar.selectbox(
+        "Model",
+        provider_config["models"],
+        index=0,
+        help="Select the model to use for generation.",
+    )
+
+# ---------------------------------------------------------------------------
+# Sidebar: Custom Model Setup Guide
+# ---------------------------------------------------------------------------
+with st.sidebar.expander("📋 How to use your custom model", expanded=False):
+    st.markdown("""
+**Option 1 – Hugging Face Hub** *(easiest for cloud-hosted fine-tunes)*
+
+1. Fine-tune your model and push it to HF Hub with `model.push_to_hub("username/my-model")`.
+2. Get an access token from [hf.co/settings/tokens](https://huggingface.co/settings/tokens).
+3. Select **Hugging Face Hub** above and enter your token + model ID.
+
+---
+
+**Option 2 – Local Transformers** *(no server, load weights directly)*
+
+1. Save your fine-tuned model to disk: `model.save_pretrained("/path/to/model")`.
+2. Install dependencies: `pip install langchain-huggingface transformers torch`.
+3. Select **Local Custom Model (Transformers)** and enter the path.
+
+---
+
+**Option 3 – Ollama** *(easiest for local inference)*
+
+1. Install [Ollama](https://ollama.com).
+2. Import your GGUF model: `ollama create my-model -f Modelfile`.
+3. Select **Ollama (Local)** and enter the model name.
+
+---
+
+**Option 4 – vLLM / LM Studio / llama.cpp** *(OpenAI-compatible server)*
+
+1. Start your server, e.g. `vllm serve username/my-finetuned-llama`.
+2. Select **Custom OpenAI-Compatible API**, enter the server URL and model name.
+""")
 
 # --- SECTION 1: DATA UPLOAD ---
 st.header("1. Upload Documents")
@@ -111,6 +175,10 @@ if "extracted_data" not in st.session_state:
 if st.button("🔍 Analyze Inputs"):
     if provider_config["requires_api_key"] and not api_key:
         st.error(f"API Key is required for {selected_provider_name}!")
+    elif provider == "local_transformers" and not model:
+        st.error("Please enter a model path or Hugging Face model ID.")
+    elif provider == "huggingface_hub" and not model:
+        st.error("Please enter your Hugging Face model ID.")
     elif not syllabus_file or not pyq_files or not pattern_file:
         st.error("Please upload all required documents.")
     else:

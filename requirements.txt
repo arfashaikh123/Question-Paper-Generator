@@ -6,3 +6,7 @@ python-dotenv==1.0.1
 openai
 pymupdf
 fpdf
+# Optional: required only for the "Local Custom Model (Transformers)" provider
+langchain-huggingface
+# torch and transformers must also be installed separately for local models:
+#   pip install torch transformers

@@ -3,7 +3,7 @@ import os
 import json
 from collections import defaultdict
 from langchain_community.document_loaders import PyPDFLoader
-from services.llm_client import get_client, get_model, DEFAULT_PROVIDER
+from services.llm_client import get_client, get_model, DEFAULT_PROVIDER, PROVIDERS
 
 def parse_and_clean_syllabus(raw_text, api_key=None, provider=DEFAULT_PROVIDER, model=None, base_url=None):
     """
@@ -19,7 +19,7 @@ def parse_and_clean_syllabus(raw_text, api_key=None, provider=DEFAULT_PROVIDER, 
         base_url: Override the provider's base URL for custom deployments.
     """
     # 1. LLM-based parsing (primary)
-    if api_key or provider != "groq":
+    if api_key or not PROVIDERS.get(provider, {}).get("requires_api_key", False):
         try:
             client = get_client(provider=provider, api_key=api_key, base_url=base_url)
             selected_model = get_model(provider=provider, model=model)
