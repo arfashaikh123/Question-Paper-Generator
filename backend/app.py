@@ -21,10 +21,13 @@ def analyze():
     try:
         data = request.form
         syllabus_text = data.get('syllabus_text')
-        # Use provided key or fallback to hardcoded key
+        # Use provided key or fallback to environment variable
         api_key = data.get('api_key') or GROQ_API_KEY
+        provider = data.get('provider', 'groq')
+        model = data.get('model') or None
+        base_url = data.get('base_url') or None
         
-        if not syllabus_text or not api_key:
+        if not syllabus_text or (not api_key and provider == 'groq'):
             return jsonify({"error": "Missing syllabus text or API key"}), 400
         
         pyq_files = request.files.getlist('pyq_files')
@@ -54,7 +57,10 @@ def analyze():
                     os.remove(ref_path)
 
         # Analyze
-        result = analyze_syllabus_and_pyqs(syllabus_text, temp_pyq_paths, api_key, reference_text)
+        result = analyze_syllabus_and_pyqs(
+            syllabus_text, temp_pyq_paths, api_key, reference_text,
+            provider=provider, model=model, base_url=base_url,
+        )
         
         # Cleanup temp files
         for path in temp_pyq_paths:
@@ -75,15 +81,22 @@ def generate():
         data = request.json
         api_key = data.get('api_key') or GROQ_API_KEY
         allocation = data.get('allocation')
-        # New optional params
+        # Optional provider config
+        provider = data.get('provider', 'groq')
+        model = data.get('model') or None
+        base_url = data.get('base_url') or None
+        # Pattern-based params
         paper_pattern = data.get('paper_pattern')
         priority_scores = data.get('priority_scores')
         
-        if not api_key:
+        if not api_key and provider == 'groq':
             return jsonify({"error": "Missing API key"}), 400
             
         # Generate Text Content
-        paper_text = generate_paper_content(allocation, api_key, paper_pattern, priority_scores)
+        paper_text = generate_paper_content(
+            allocation, api_key, paper_pattern, priority_scores,
+            provider=provider, model=model, base_url=base_url,
+        )
         
         return jsonify({"paper_text": paper_text})
 
@@ -156,11 +169,17 @@ def chat():
         api_key = data.get('api_key') or GROQ_API_KEY
         message = data.get('message')
         context = data.get('context', {})
+        provider = data.get('provider', 'groq')
+        model = data.get('model') or None
+        base_url = data.get('base_url') or None
         
-        if not api_key or not message:
+        if (not api_key and provider == 'groq') or not message:
             return jsonify({"error": "Missing API key or message"}), 400
             
-        response = chat_agent.process_message(message, context, api_key)
+        response = chat_agent.process_message(
+            message, context, api_key,
+            provider=provider, model=model, base_url=base_url,
+        )
         return jsonify(response)
 
     except Exception as e:

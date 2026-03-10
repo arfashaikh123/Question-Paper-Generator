@@ -3,9 +3,9 @@ import os
 import re
 import json
 import fitz  # PyMuPDF
-from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from collections import Counter
+from llm_providers import get_langchain_llm, DEFAULT_PROVIDER
 
 # --- 1. Text Extraction (OCR / PDF Reading) ---
 
@@ -33,15 +33,30 @@ def extract_text_from_pdf(pdf_file, api_key=None, use_ocr_fallback=False) -> str
 
 # --- 2. Pattern Extraction (LLM Based) ---
 
-def extract_pattern_from_text(text: str, api_key: str) -> str:
+def extract_pattern_from_text(
+    text: str,
+    api_key: str,
+    provider: str = DEFAULT_PROVIDER,
+    model: str = None,
+    base_url: str = None,
+) -> str:
     """
-    Uses Groq to analyze the sample paper text and extract the exam structure.
+    Uses an LLM to analyze the sample paper text and extract the exam structure.
     Returns a markdown description of the pattern.
+
+    The provider, model, and base_url parameters let you swap Groq for any
+    local or custom-hosted model (e.g. Ollama or a fine-tuned model).
     """
-    if not api_key:
+    if not api_key and provider == "groq":
         return "Error: API Key missing."
 
-    llm = ChatGroq(temperature=0, model_name="llama-3.3-70b-versatile", api_key=api_key)
+    llm = get_langchain_llm(
+        provider=provider,
+        api_key=api_key,
+        model=model,
+        base_url=base_url,
+        temperature=0,
+    )
     
     prompt = ChatPromptTemplate.from_messages([
         ("system", "You are an expert exam analyzer."),
@@ -70,19 +85,33 @@ def extract_pattern_from_text(text: str, api_key: str) -> str:
 
 # --- 3. Syllabus Parsing ---
 
-def parse_syllabus_modules(text: str, api_key: str = None) -> dict:
+def parse_syllabus_modules(
+    text: str,
+    api_key: str = None,
+    provider: str = DEFAULT_PROVIDER,
+    model: str = None,
+    base_url: str = None,
+) -> dict:
     """
     Parses syllabus text to find 'Module: Hours' mapping.
-    1. Tries Groq LLM first (smart, handles any syllabus format).
-    2. Falls back to Regex if LLM fails or no api_key is provided.
+    1. Tries the configured LLM first (handles any syllabus format).
+    2. Falls back to Regex if the LLM fails or no api_key is provided.
+
+    The provider, model, and base_url parameters let you swap Groq for any
+    local or custom-hosted model (e.g. Ollama or a fine-tuned model).
     """
     modules = {}
 
-    # 1. Groq-based parsing (primary, if api_key provided)
-    # Uses llama-3.3-70b-versatile for higher accuracy in the Streamlit app context.
-    if api_key:
+    # 1. LLM-based parsing (primary, if api_key or provider doesn't need one)
+    if api_key or provider != "groq":
         try:
-            llm = ChatGroq(temperature=0, model_name="llama-3.3-70b-versatile", api_key=api_key)
+            llm = get_langchain_llm(
+                provider=provider,
+                api_key=api_key,
+                model=model,
+                base_url=base_url,
+                temperature=0,
+            )
             prompt = ChatPromptTemplate.from_messages([
                 ("system", "You are a precise data extraction assistant."),
                 ("human", """Analyze the Syllabus Text below and extract the **Module Names** and their **Teaching Hours**.
@@ -115,7 +144,7 @@ def parse_syllabus_modules(text: str, api_key: str = None) -> dict:
             if modules:
                 return modules
         except Exception as e:
-            print(f"Groq Syllabus Parsing failed: {e}. Falling back to regex.")
+            print(f"LLM Syllabus Parsing failed: {e}. Falling back to regex.")
 
     # 2. Regex fallback
     lines = text.split('\n')
@@ -177,19 +206,31 @@ def generate_question_paper(
     pattern_description: str,
     weighted_topics: dict,
     syllabus_text: str,
-    api_key: str
+    api_key: str,
+    provider: str = DEFAULT_PROVIDER,
+    model: str = None,
+    base_url: str = None,
 ) -> str:
     """
     Generates the final question paper.
+
+    The provider, model, and base_url parameters let you swap Groq for any
+    local or custom-hosted model (e.g. Ollama or a fine-tuned model).
     """
-    if not api_key:
+    if not api_key and provider == "groq":
         return "Error: API Key missing."
         
     # Prepare High Priority Topics String
     sorted_topics = sorted(weighted_topics.items(), key=lambda x: x[1], reverse=True)
     top_topics_str = "\n".join([f"- {t[0]} (Weight: {t[1]:.2f})" for t in sorted_topics[:5]])
 
-    llm = ChatGroq(temperature=0.5, model_name="llama-3.3-70b-versatile", api_key=api_key)
+    llm = get_langchain_llm(
+        provider=provider,
+        api_key=api_key,
+        model=model,
+        base_url=base_url,
+        temperature=0.5,
+    )
     
     prompt = ChatPromptTemplate.from_messages([
         ("system", "You are an expert academic question paper setter."),

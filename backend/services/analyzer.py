@@ -3,19 +3,26 @@ import os
 import json
 from collections import defaultdict
 from langchain_community.document_loaders import PyPDFLoader
-from groq import Groq
+from services.llm_client import get_client, get_model, DEFAULT_PROVIDER
 
-def parse_and_clean_syllabus(raw_text, api_key=None):
+def parse_and_clean_syllabus(raw_text, api_key=None, provider=DEFAULT_PROVIDER, model=None, base_url=None):
     """
     Parses raw syllabus text to extract Topic -> Hours mapping.
-    Uses Groq LLM as the primary parser for robust extraction from any syllabus format.
+    Uses an LLM as the primary parser for robust extraction from any format.
     Falls back to pattern-based parsing if no API key is provided or LLM fails.
+
+    Args:
+        raw_text: Raw syllabus text.
+        api_key:  API key for the chosen provider.
+        provider: LLM provider ('groq', 'ollama', or 'openai_compatible').
+        model:    Model name; falls back to the provider's default.
+        base_url: Override the provider's base URL for custom deployments.
     """
-    # 1. Groq-based parsing (primary)
-    # Uses llama-3.1-8b-instant for low-latency responses in the backend API context.
-    if api_key:
+    # 1. LLM-based parsing (primary)
+    if api_key or provider != "groq":
         try:
-            client = Groq(api_key=api_key)
+            client = get_client(provider=provider, api_key=api_key, base_url=base_url)
+            selected_model = get_model(provider=provider, model=model)
             prompt = f"""You are a precise data extraction assistant. Analyze the following syllabus text and extract all module/unit names and their teaching hours.
 
 Syllabus Text:
@@ -33,7 +40,7 @@ Output format:
 Example: {{"Introduction to Data Structures": 8, "Sorting Algorithms": 12, "Graph Theory": 10}}"""
 
             response = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model=selected_model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0,
                 max_tokens=1500,
@@ -49,7 +56,7 @@ Example: {{"Introduction to Data Structures": 8, "Sorting Algorithms": 12, "Grap
             if topics:
                 return topics
         except Exception as e:
-            print(f"Groq syllabus parsing failed: {e}. Falling back to pattern-based parsing.")
+            print(f"LLM syllabus parsing failed: {e}. Falling back to pattern-based parsing.")
 
     # 2. Pattern-based fallback
     topics = {}
@@ -101,11 +108,18 @@ def calculate_allocation(priority_scores, total_questions=10):
         
     return allocation
 
-def analyze_syllabus_and_pyqs(syllabus_text, pyq_paths, api_key, reference_text=None):
-    client = Groq(api_key=api_key)
+def analyze_syllabus_and_pyqs(
+    syllabus_text, pyq_paths, api_key, reference_text=None,
+    provider=DEFAULT_PROVIDER, model=None, base_url=None,
+):
+    client = get_client(provider=provider, api_key=api_key, base_url=base_url)
+    selected_model = get_model(provider=provider, model=model)
     
     # 1. Parse Syllabus
-    syllabus_topics = parse_and_clean_syllabus(syllabus_text, api_key=api_key)
+    syllabus_topics = parse_and_clean_syllabus(
+        syllabus_text, api_key=api_key,
+        provider=provider, model=model, base_url=base_url,
+    )
     if not syllabus_topics:
         raise ValueError("Could not parse syllabus. Please ensure the syllabus contains module/topic names and teaching hours.")
 
@@ -137,7 +151,7 @@ def analyze_syllabus_and_pyqs(syllabus_text, pyq_paths, api_key, reference_text=
                 
                 try:
                     response = client.chat.completions.create(
-                        model="llama-3.1-8b-instant",
+                        model=selected_model,
                         messages=[{"role": "user", "content": prompt}],
                         temperature=0,
                         max_tokens=60
@@ -162,14 +176,20 @@ def analyze_syllabus_and_pyqs(syllabus_text, pyq_paths, api_key, reference_text=
     # 4. Pattern Extraction (if reference provided)
     paper_pattern = None
     if reference_text:
-        paper_pattern = extract_paper_pattern(reference_text, api_key)
+        paper_pattern = extract_paper_pattern(
+            reference_text, api_key,
+            provider=provider, model=model, base_url=base_url,
+        )
 
     # 5. Header Extraction (from first PYQ)
     extracted_header = None
     if pyq_paths:
         try:
             first_pyq_text = extract_text_from_pdf(pyq_paths[0])
-            extracted_header = extract_header_info(first_pyq_text, api_key)
+            extracted_header = extract_header_info(
+                first_pyq_text, api_key,
+                provider=provider, model=model, base_url=base_url,
+            )
         except Exception as e:
             print(f"Failed to extract header from PYQ: {e}")
 
@@ -187,11 +207,12 @@ def analyze_syllabus_and_pyqs(syllabus_text, pyq_paths, api_key, reference_text=
         "extracted_header": extracted_header
     }
 
-def extract_paper_pattern(text, api_key):
+def extract_paper_pattern(text, api_key, provider=DEFAULT_PROVIDER, model=None, base_url=None):
     """
-    Uses LLM to deduce the exam pattern from a reference paper text.
+    Uses an LLM to deduce the exam pattern from a reference paper text.
     """
-    client = Groq(api_key=api_key)
+    client = get_client(provider=provider, api_key=api_key, base_url=base_url)
+    selected_model = get_model(provider=provider, model=model)
     prompt = f"""
     Analyze the following exam paper text and extract the **Structure/Pattern**.
     
@@ -233,7 +254,7 @@ def extract_paper_pattern(text, api_key):
     
     try:
         response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=selected_model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
             max_tokens=1500,
@@ -245,11 +266,12 @@ def extract_paper_pattern(text, api_key):
         print(f"Pattern Extraction Failed: {e}")
         return None
 
-def extract_header_info(text, api_key):
+def extract_header_info(text, api_key, provider=DEFAULT_PROVIDER, model=None, base_url=None):
     """
     Extracts the exam header information from the text.
     """
-    client = Groq(api_key=api_key)
+    client = get_client(provider=provider, api_key=api_key, base_url=base_url)
+    selected_model = get_model(provider=provider, model=model)
     prompt = f"""
     Extract the **Exam Header Information** from the following text (first page of a question paper).
     
@@ -270,7 +292,7 @@ def extract_header_info(text, api_key):
     
     try:
         response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=selected_model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
             max_tokens=200

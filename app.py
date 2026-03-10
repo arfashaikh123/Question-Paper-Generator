@@ -10,6 +10,7 @@ from utils import (
     calculate_topic_weights,
     generate_question_paper
 )
+from llm_providers import PROVIDERS, DEFAULT_PROVIDER
 
 # Page Config
 st.set_page_config(page_title="Smart Question Paper Generator", layout="wide")
@@ -22,15 +23,68 @@ Generate a university-standard question paper by analyzing:
 3. **Sample Question Paper** (for exam pattern)
 """)
 
-# Sidebar: API Key
-st.sidebar.header("Configuration")
-api_key = st.sidebar.text_input("Groq API Key", type="password")
+# ---------------------------------------------------------------------------
+# Sidebar: LLM Provider Configuration
+# ---------------------------------------------------------------------------
+st.sidebar.header("LLM Configuration")
 
-if not api_key and "GROQ_API_KEY" in os.environ:
-    api_key = os.environ["GROQ_API_KEY"]
+provider_options = {v["name"]: k for k, v in PROVIDERS.items()}
+selected_provider_name = st.sidebar.selectbox(
+    "LLM Provider",
+    list(provider_options.keys()),
+    help="Choose where to run the language model. Groq is a fast cloud option; "
+         "Ollama lets you run models locally; the custom option works with any "
+         "OpenAI-compatible fine-tuned model server.",
+)
+provider = provider_options[selected_provider_name]
+provider_config = PROVIDERS[provider]
 
-if not api_key:
-    st.sidebar.warning("Please enter your Groq API Key to proceed.")
+st.sidebar.caption(provider_config["description"])
+
+# API Key (only shown for providers that need one)
+api_key = ""
+if provider_config["requires_api_key"]:
+    api_key = st.sidebar.text_input(
+        f"{selected_provider_name} API Key", type="password"
+    )
+    env_var = "GROQ_API_KEY" if provider == "groq" else "LLM_API_KEY"
+    if not api_key and env_var in os.environ:
+        api_key = os.environ[env_var]
+    if not api_key:
+        st.sidebar.warning(f"Please enter your {selected_provider_name} API Key to proceed.")
+else:
+    # Providers like Ollama and custom servers may optionally require a key
+    api_key = st.sidebar.text_input(
+        "API Key (optional)", type="password",
+        help="Leave blank if the server does not require authentication."
+    )
+
+# Base URL (shown for Ollama and custom providers, editable for Groq too)
+default_base_url = provider_config["base_url"]
+if provider in ("ollama", "openai_compatible"):
+    base_url = st.sidebar.text_input(
+        "Base URL",
+        value=default_base_url,
+        help="The base URL of the model server (e.g., http://localhost:11434/v1).",
+    )
+else:
+    base_url = default_base_url  # Use Groq's default
+
+# Model selection
+if provider_config["models"]:
+    model = st.sidebar.selectbox(
+        "Model",
+        provider_config["models"],
+        index=0,
+        help="Select the model to use for generation.",
+    )
+else:
+    model = st.sidebar.text_input(
+        "Model Name",
+        value=provider_config["default_model"],
+        help="Enter the exact model name supported by your server "
+             "(e.g., llama3.2, mistral, or your fine-tuned model name).",
+    )
 
 # --- SECTION 1: DATA UPLOAD ---
 st.header("1. Upload Documents")
@@ -55,8 +109,8 @@ if "extracted_data" not in st.session_state:
 
 # --- SECTION 2: ANALYSIS ---
 if st.button("🔍 Analyze Inputs"):
-    if not api_key:
-        st.error("API Key is required!")
+    if provider_config["requires_api_key"] and not api_key:
+        st.error(f"API Key is required for {selected_provider_name}!")
     elif not syllabus_file or not pyq_files or not pattern_file:
         st.error("Please upload all required documents.")
     else:
@@ -69,7 +123,10 @@ if st.button("🔍 Analyze Inputs"):
                 with st.expander("Debug: Extracted Syllabus Text"):
                     st.text(syllabus_text[:2000] + "..." if len(syllabus_text) > 2000 else syllabus_text)
                 
-                modules = parse_syllabus_modules(syllabus_text, api_key)
+                modules = parse_syllabus_modules(
+                    syllabus_text, api_key,
+                    provider=provider, model=model, base_url=base_url,
+                )
                 
                 # 2. Parse PYQs
                 pyq_text = ""
@@ -78,7 +135,10 @@ if st.button("🔍 Analyze Inputs"):
                     
                 # 3. Parse Pattern
                 pattern_text = extract_text_from_pdf(pattern_file)
-                extracted_pattern = extract_pattern_from_text(pattern_text, api_key)
+                extracted_pattern = extract_pattern_from_text(
+                    pattern_text, api_key,
+                    provider=provider, model=model, base_url=base_url,
+                )
                 
                 # 4. Calculate Weights
                 final_weights = {} # init
@@ -137,12 +197,15 @@ if "extracted_data" in st.session_state and st.session_state.extracted_data:
     st.header("3. Generate Question Paper")
     
     if st.button("✨ Generate Paper"):
-        with st.spinner("Generating Question Paper using Groq..."):
+        with st.spinner("Generating Question Paper..."):
             final_paper = generate_question_paper(
                 pattern_description=pattern_input,
                 weighted_topics=data["weights"],
                 syllabus_text=data["syllabus_text"],
-                api_key=api_key
+                api_key=api_key,
+                provider=provider,
+                model=model,
+                base_url=base_url,
             )
             
             st.session_state.final_paper = final_paper

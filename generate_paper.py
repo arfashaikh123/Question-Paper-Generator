@@ -2,8 +2,8 @@
 import os
 import sys
 from PyPDF2 import PdfReader
-from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
+from llm_providers import get_langchain_llm, PROVIDERS, DEFAULT_PROVIDER
 
 def extract_text_from_pdf(pdf_path):
     try:
@@ -45,16 +45,25 @@ def main():
     print(f"\nSyllabus Length: {len(syllabus_text)} characters")
     print(f"Previous Papers Length: {len(previous_papers_text)} characters")
 
-    # Initialize ChatGroq
-    api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key:
-        print("Error: GROQ_API_KEY environment variable not set.")
+    # Initialize the LLM via the provider abstraction
+    # Override provider/model via environment variables for flexibility:
+    #   LLM_PROVIDER=ollama LLM_MODEL=llama3.2 LLM_BASE_URL=http://localhost:11434/v1
+    provider = os.environ.get("LLM_PROVIDER", DEFAULT_PROVIDER)
+    model = os.environ.get("LLM_MODEL") or None
+    base_url = os.environ.get("LLM_BASE_URL") or None
+
+    api_key = os.environ.get("GROQ_API_KEY") or os.environ.get("LLM_API_KEY")
+    if not api_key and PROVIDERS.get(provider, {}).get("requires_api_key", False):
+        print(f"Error: API key environment variable not set for provider '{provider}'.")
+        print("Set GROQ_API_KEY for Groq, or LLM_API_KEY for other providers.")
         return
 
-    llm = ChatGroq(
+    llm = get_langchain_llm(
+        provider=provider,
+        api_key=api_key,
+        model=model,
+        base_url=base_url,
         temperature=0.3,
-        model_name="llama-3.3-70b-versatile",
-        api_key=api_key
     )
 
     # Define the prompt template

@@ -1,23 +1,28 @@
-from groq import Groq
+from services.llm_client import get_client, get_model, DEFAULT_PROVIDER
 import json
 
 class ChatAgent:
     def __init__(self):
         pass
 
-    def process_message(self, user_message, context, api_key):
+    def process_message(self, user_message, context, api_key,
+                        provider=DEFAULT_PROVIDER, model=None, base_url=None):
         """
         Processes the user's message and returns a reply and potential action.
         
         Args:
             user_message (str): The user's input.
-            context (dict): Current analysis state (syllabus, pattern, etc).
-            api_key (str): Groq API Key.
+            context (dict):     Current analysis state (syllabus, pattern, etc).
+            api_key (str):      API key for the chosen LLM provider.
+            provider (str):     LLM provider ('groq', 'ollama', or 'openai_compatible').
+            model (str):        Model name; falls back to the provider's default.
+            base_url (str):     Override the provider's base URL for custom deployments.
             
         Returns:
             dict: {"reply": str, "action": str|None}
         """
-        client = Groq(api_key=api_key)
+        client = get_client(provider=provider, api_key=api_key, base_url=base_url)
+        selected_model = get_model(provider=provider, model=model)
         
         # Construct System Prompt
         system_prompt = f"""
@@ -49,7 +54,7 @@ class ChatAgent:
         
         try:
             response = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model=selected_model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message}
@@ -68,11 +73,13 @@ class ChatAgent:
         except Exception as e:
             return {"reply": f"Error interacting with AI: {str(e)}", "action": None}
 
-    def refine_header_text(self, raw_text, api_key):
+    def refine_header_text(self, raw_text, api_key,
+                           provider=DEFAULT_PROVIDER, model=None, base_url=None):
         """
         Refines raw header text into a professional exam header using LLM.
         """
-        client = Groq(api_key=api_key)
+        client = get_client(provider=provider, api_key=api_key, base_url=base_url)
+        selected_model = get_model(provider=provider, model=model)
         
         system_prompt = """
         You are an expert academic typesetter. 
@@ -84,7 +91,7 @@ class ChatAgent:
         
         try:
             response = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model=selected_model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"Refine this header info: {raw_text}"}
