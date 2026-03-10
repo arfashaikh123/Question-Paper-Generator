@@ -26,7 +26,10 @@ st.markdown("Priority = 0.6 × Syllabus Weight + 0.4 × PYQ Frequency")
 st.sidebar.header("🤖 LLM Configuration")
 
 provider_options = {v["name"]: k for k, v in PROVIDERS.items()
-                   if k != "local_transformers"}  # Exclude in-process model loading (not HTTP-based)
+                   if k not in ("local_transformers", "custom_callable")}
+# Exclude providers that are not HTTP-based: local_transformers loads weights
+# in-process via transformers, and custom_callable invokes a local Python
+# callable.  Both require get_langchain_llm() rather than get_openai_client().
 selected_provider_name = st.sidebar.selectbox(
     "LLM Provider",
     list(provider_options.keys()),

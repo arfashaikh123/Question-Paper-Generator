@@ -14,7 +14,7 @@ chat_agent = ChatAgent()
 
 # --- CONFIGURATION ---
 # TODO: Replace with your actual Groq API Key
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+DEFAULT_API_KEY = os.getenv("GROQ_API_KEY") or os.getenv("LLM_API_KEY")
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
@@ -24,7 +24,7 @@ def analyze():
         data = request.form
         syllabus_text = data.get('syllabus_text')
         # Use provided key or fallback to environment variable
-        api_key = data.get('api_key') or GROQ_API_KEY
+        api_key = data.get('api_key') or DEFAULT_API_KEY
         provider = data.get('provider', 'groq')
         model = data.get('model') or None
         base_url = data.get('base_url') or None
@@ -81,7 +81,7 @@ def analyze():
 def generate():
     try:
         data = request.json
-        api_key = data.get('api_key') or GROQ_API_KEY
+        api_key = data.get('api_key') or DEFAULT_API_KEY
         allocation = data.get('allocation')
         # Optional provider config
         provider = data.get('provider', 'groq')
@@ -123,7 +123,7 @@ def download_pdf():
         if header_text_raw:
             # Use the ChatAgent to perfect the header
              # We need a key for this agent interaction. Use global or from request.
-            api_key = GROQ_API_KEY 
+            api_key = DEFAULT_API_KEY 
             polished_header = chat_agent.refine_header_text(header_text_raw, api_key)
 
         # Handle Header Image
@@ -168,7 +168,7 @@ def download_pdf():
 def chat():
     try:
         data = request.json
-        api_key = data.get('api_key') or GROQ_API_KEY
+        api_key = data.get('api_key') or DEFAULT_API_KEY
         message = data.get('message')
         context = data.get('context', {})
         provider = data.get('provider', 'groq')

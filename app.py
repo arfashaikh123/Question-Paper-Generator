@@ -10,7 +10,7 @@ from utils import (
     calculate_topic_weights,
     generate_question_paper
 )
-from llm_providers import PROVIDERS, DEFAULT_PROVIDER
+from llm_providers import PROVIDERS, DEFAULT_PROVIDER, custom_llm_module_exists
 
 # Page Config
 st.set_page_config(page_title="Smart Question Paper Generator", layout="wide")
@@ -50,7 +50,11 @@ if provider_config["requires_api_key"]:
         else f"{selected_provider_name} API Key"
     )
     api_key = st.sidebar.text_input(key_label, type="password")
-    env_var = "GROQ_API_KEY" if provider == "groq" else "HF_TOKEN" if provider == "huggingface_hub" else "LLM_API_KEY"
+    _env_var_map = {
+        "groq": "GROQ_API_KEY",
+        "huggingface_hub": "HF_TOKEN",
+    }
+    env_var = _env_var_map.get(provider, "LLM_API_KEY")
     if not api_key and env_var in os.environ:
         api_key = os.environ[env_var]
     if not api_key:
@@ -106,6 +110,20 @@ elif provider == "huggingface_hub":
     if not model:
         st.sidebar.warning("Enter your Hugging Face model ID to proceed.")
 
+elif provider == "custom_callable":
+    # No API key, no server URL, no model name — just a local Python file.
+    base_url = None
+    model = None
+    _module_found = custom_llm_module_exists()
+    if _module_found:
+        st.sidebar.success("✅ `custom_llm.py` found — your model is ready.")
+    else:
+        st.sidebar.error(
+            "❌ `custom_llm.py` not found in the project root. "
+            "Copy `custom_llm_example.py` to `custom_llm.py` and implement "
+            "your `generate(prompt: str) -> str` function."
+        )
+
 else:  # groq
     base_url = provider_config["base_url"]
     model = st.sidebar.selectbox(
@@ -148,6 +166,20 @@ with st.sidebar.expander("📋 How to use your custom model", expanded=False):
 
 1. Start your server, e.g. `vllm serve username/my-finetuned-llama`.
 2. Select **Custom OpenAI-Compatible API**, enter the server URL and model name.
+
+---
+
+**Option 5 – Custom Built LLM (No API)** *(your own model, zero API calls)*
+
+1. Copy `custom_llm_example.py` → `custom_llm.py` in the project root.
+2. Implement the `generate(prompt: str) -> str` function with your own inference logic.
+3. Select **Custom Built LLM (No API)** above — no API key, no server needed.
+
+```python
+# custom_llm.py — minimal example
+def generate(prompt: str) -> str:
+    return my_model.predict(prompt)   # your own code here
+```
 """)
 
 # --- SECTION 1: DATA UPLOAD ---
@@ -179,6 +211,11 @@ if st.button("🔍 Analyze Inputs"):
         st.error("Please enter a model path or Hugging Face model ID.")
     elif provider == "huggingface_hub" and not model:
         st.error("Please enter your Hugging Face model ID.")
+    elif provider == "custom_callable" and not custom_llm_module_exists():
+        st.error(
+            "custom_llm.py not found. Copy custom_llm_example.py to custom_llm.py "
+            "and implement your generate() function."
+        )
     elif not syllabus_file or not pyq_files or not pattern_file:
         st.error("Please upload all required documents.")
     else:

@@ -58,12 +58,26 @@ def main():
         print("Set GROQ_API_KEY for Groq, or LLM_API_KEY for other providers.")
         return
 
+    # For the custom_callable provider, load the user's module now so any
+    # import errors are reported before we start processing PDFs.
+    custom_module_path = os.environ.get("LLM_CUSTOM_MODULE") or None
+    if provider == "custom_callable":
+        from llm_providers import _load_custom_llm_module, register_custom_llm
+        try:
+            fn = _load_custom_llm_module(module_path=custom_module_path)
+            register_custom_llm(fn)
+            print(f"Custom LLM loaded from: {custom_module_path or 'custom_llm.py'}")
+        except (FileNotFoundError, AttributeError) as exc:
+            print(f"Error loading custom LLM: {exc}")
+            return
+
     llm = get_langchain_llm(
         provider=provider,
         api_key=api_key,
         model=model,
         base_url=base_url,
         temperature=0.3,
+        custom_module_path=custom_module_path,
     )
 
     # Define the prompt template
