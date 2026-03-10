@@ -10,6 +10,7 @@ from utils import (
     calculate_topic_weights,
     generate_question_paper
 )
+from llm_providers import PROVIDERS, DEFAULT_PROVIDER, custom_llm_module_exists
 
 # Page Config
 st.set_page_config(page_title="Smart Question Paper Generator", layout="wide")
@@ -22,15 +23,164 @@ Generate a university-standard question paper by analyzing:
 3. **Sample Question Paper** (for exam pattern)
 """)
 
-# Sidebar: API Key
-st.sidebar.header("Configuration")
-api_key = st.sidebar.text_input("Groq API Key", type="password")
+# ---------------------------------------------------------------------------
+# Sidebar: LLM Provider Configuration
+# ---------------------------------------------------------------------------
+st.sidebar.header("LLM Configuration")
 
-if not api_key and "GROQ_API_KEY" in os.environ:
-    api_key = os.environ["GROQ_API_KEY"]
+provider_options = {v["name"]: k for k, v in PROVIDERS.items()}
+selected_provider_name = st.sidebar.selectbox(
+    "LLM Provider",
+    list(provider_options.keys()),
+    help="Choose where to run the language model. Groq is a fast cloud option; "
+         "Ollama lets you run models locally; the custom option works with any "
+         "OpenAI-compatible fine-tuned model server.",
+)
+provider = provider_options[selected_provider_name]
+provider_config = PROVIDERS[provider]
 
-if not api_key:
-    st.sidebar.warning("Please enter your Groq API Key to proceed.")
+st.sidebar.caption(provider_config["description"])
+
+# API Key (only shown for providers that need one)
+api_key = ""
+if provider_config["requires_api_key"]:
+    key_label = (
+        "Hugging Face Token"
+        if provider == "huggingface_hub"
+        else f"{selected_provider_name} API Key"
+    )
+    api_key = st.sidebar.text_input(key_label, type="password")
+    _env_var_map = {
+        "groq": "GROQ_API_KEY",
+        "huggingface_hub": "HF_TOKEN",
+    }
+    env_var = _env_var_map.get(provider, "LLM_API_KEY")
+    if not api_key and env_var in os.environ:
+        api_key = os.environ[env_var]
+    if not api_key:
+        st.sidebar.warning(f"Please enter your {key_label} to proceed.")
+else:
+    # Providers like Ollama and custom servers may optionally require a key
+    api_key = st.sidebar.text_input(
+        "API Key (optional)", type="password",
+        help="Leave blank if the server does not require authentication."
+    )
+
+# Model / path input
+if provider == "local_transformers":
+    # Local transformers needs a model path or HF model ID, not a base URL
+    base_url = None
+    model = st.sidebar.text_input(
+        "Model Path or HF Model ID",
+        value="",
+        help=(
+            "Path to your fine-tuned model folder on disk "
+            "(e.g. /models/my-llm) **or** a Hugging Face model ID "
+            "(e.g. username/my-finetuned-llama). "
+            "The model must be compatible with the 🤗 text-generation pipeline."
+        ),
+    )
+    if not model:
+        st.sidebar.warning("Enter a local model path or HF model ID to proceed.")
+
+elif provider in ("ollama", "openai_compatible"):
+    base_url = st.sidebar.text_input(
+        "Base URL",
+        value=provider_config["base_url"],
+        help="The base URL of the model server (e.g., http://localhost:11434/v1).",
+    )
+    model = st.sidebar.text_input(
+        "Model Name",
+        value=provider_config["default_model"],
+        help="Enter the exact model name supported by your server "
+             "(e.g., llama3.2, mistral, or your fine-tuned model name).",
+    )
+
+elif provider == "huggingface_hub":
+    base_url = provider_config["base_url"]  # Fixed HF endpoint
+    model = st.sidebar.text_input(
+        "HF Model ID",
+        value="",
+        help=(
+            "The full Hugging Face model ID, e.g. 'username/my-finetuned-llama'. "
+            "Must be a model that supports text generation and is accessible "
+            "with your HF token."
+        ),
+    )
+    if not model:
+        st.sidebar.warning("Enter your Hugging Face model ID to proceed.")
+
+elif provider == "custom_callable":
+    # No API key, no server URL, no model name — just a local Python file.
+    base_url = None
+    model = None
+    _module_found = custom_llm_module_exists()
+    if _module_found:
+        st.sidebar.success("✅ `custom_llm.py` found — your model is ready.")
+    else:
+        st.sidebar.error(
+            "❌ `custom_llm.py` not found in the project root. "
+            "Copy `custom_llm_example.py` to `custom_llm.py` and implement "
+            "your `generate(prompt: str) -> str` function."
+        )
+
+else:  # groq
+    base_url = provider_config["base_url"]
+    model = st.sidebar.selectbox(
+        "Model",
+        provider_config["models"],
+        index=0,
+        help="Select the model to use for generation.",
+    )
+
+# ---------------------------------------------------------------------------
+# Sidebar: Custom Model Setup Guide
+# ---------------------------------------------------------------------------
+with st.sidebar.expander("📋 How to use your custom model", expanded=False):
+    st.markdown("""
+**Option 1 – Hugging Face Hub** *(easiest for cloud-hosted fine-tunes)*
+
+1. Fine-tune your model and push it to HF Hub with `model.push_to_hub("username/my-model")`.
+2. Get an access token from [hf.co/settings/tokens](https://huggingface.co/settings/tokens).
+3. Select **Hugging Face Hub** above and enter your token + model ID.
+
+---
+
+**Option 2 – Local Transformers** *(no server, load weights directly)*
+
+1. Save your fine-tuned model to disk: `model.save_pretrained("/path/to/model")`.
+2. Install dependencies: `pip install langchain-huggingface transformers torch`.
+3. Select **Local Custom Model (Transformers)** and enter the path.
+
+---
+
+**Option 3 – Ollama** *(easiest for local inference)*
+
+1. Install [Ollama](https://ollama.com).
+2. Import your GGUF model: `ollama create my-model -f Modelfile`.
+3. Select **Ollama (Local)** and enter the model name.
+
+---
+
+**Option 4 – vLLM / LM Studio / llama.cpp** *(OpenAI-compatible server)*
+
+1. Start your server, e.g. `vllm serve username/my-finetuned-llama`.
+2. Select **Custom OpenAI-Compatible API**, enter the server URL and model name.
+
+---
+
+**Option 5 – Custom Built LLM (No API)** *(your own model, zero API calls)*
+
+1. Copy `custom_llm_example.py` → `custom_llm.py` in the project root.
+2. Implement the `generate(prompt: str) -> str` function with your own inference logic.
+3. Select **Custom Built LLM (No API)** above — no API key, no server needed.
+
+```python
+# custom_llm.py — minimal example
+def generate(prompt: str) -> str:
+    return my_model.predict(prompt)   # your own code here
+```
+""")
 
 # --- SECTION 1: DATA UPLOAD ---
 st.header("1. Upload Documents")
@@ -55,8 +205,17 @@ if "extracted_data" not in st.session_state:
 
 # --- SECTION 2: ANALYSIS ---
 if st.button("🔍 Analyze Inputs"):
-    if not api_key:
-        st.error("API Key is required!")
+    if provider_config["requires_api_key"] and not api_key:
+        st.error(f"API Key is required for {selected_provider_name}!")
+    elif provider == "local_transformers" and not model:
+        st.error("Please enter a model path or Hugging Face model ID.")
+    elif provider == "huggingface_hub" and not model:
+        st.error("Please enter your Hugging Face model ID.")
+    elif provider == "custom_callable" and not custom_llm_module_exists():
+        st.error(
+            "custom_llm.py not found. Copy custom_llm_example.py to custom_llm.py "
+            "and implement your generate() function."
+        )
     elif not syllabus_file or not pyq_files or not pattern_file:
         st.error("Please upload all required documents.")
     else:
@@ -69,7 +228,10 @@ if st.button("🔍 Analyze Inputs"):
                 with st.expander("Debug: Extracted Syllabus Text"):
                     st.text(syllabus_text[:2000] + "..." if len(syllabus_text) > 2000 else syllabus_text)
                 
-                modules = parse_syllabus_modules(syllabus_text, api_key)
+                modules = parse_syllabus_modules(
+                    syllabus_text, api_key,
+                    provider=provider, model=model, base_url=base_url,
+                )
                 
                 # 2. Parse PYQs
                 pyq_text = ""
@@ -78,7 +240,10 @@ if st.button("🔍 Analyze Inputs"):
                     
                 # 3. Parse Pattern
                 pattern_text = extract_text_from_pdf(pattern_file)
-                extracted_pattern = extract_pattern_from_text(pattern_text, api_key)
+                extracted_pattern = extract_pattern_from_text(
+                    pattern_text, api_key,
+                    provider=provider, model=model, base_url=base_url,
+                )
                 
                 # 4. Calculate Weights
                 final_weights = {} # init
@@ -137,12 +302,15 @@ if "extracted_data" in st.session_state and st.session_state.extracted_data:
     st.header("3. Generate Question Paper")
     
     if st.button("✨ Generate Paper"):
-        with st.spinner("Generating Question Paper using Groq..."):
+        with st.spinner("Generating Question Paper..."):
             final_paper = generate_question_paper(
                 pattern_description=pattern_input,
                 weighted_topics=data["weights"],
                 syllabus_text=data["syllabus_text"],
-                api_key=api_key
+                api_key=api_key,
+                provider=provider,
+                model=model,
+                base_url=base_url,
             )
             
             st.session_state.final_paper = final_paper
