@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Question Paper Generator Pro</title>
+    <title>NeuroGen Studio — AI Question Paper Generator</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
@@ -14,10 +14,395 @@
     <!-- Background Canvas -->
     <canvas id="bgCanvas"></canvas>
 
-    <!-- 1. LANDING PAGE -->
-    <div id="landingPage" class="landing-container">
-        <nav class="navbar" style="position: absolute; top: 20px; left: 40px;">
+    <!-- 0. HOME PAGE -->
+    <div id="homePage" class="page-container">
+        <nav class="main-nav">
             <h1 class="logo">🧠 NeuroGen <span class="highlight">Studio</span></h1>
+            <div class="nav-links">
+                <a href="#" class="nav-link active" id="navHomeBtn">Home</a>
+                <a href="#" class="nav-link" id="navAboutBtn">About</a>
+                <a href="#" class="nav-link nav-cta" id="navGetStartedBtn">Get Started →</a>
+            </div>
+        </nav>
+
+        <div class="home-hero">
+            <div class="home-badge">✨ Powered by Groq + LangChain RAG</div>
+            <h2 class="home-title">Design Intelligent<br>Question Papers.</h2>
+            <p class="home-subtitle">
+                Upload your syllabus and previous year questions. Our AI analyses topic priorities,
+                learns exam patterns, and architects the perfect exam — in seconds.
+            </p>
+            <div class="home-cta-group">
+                <button class="neon-btn huge-btn" id="homeGetStartedBtn">Get Started →</button>
+                <button class="ghost-btn" id="homeLearnMoreBtn">Learn How It Works</button>
+            </div>
+        </div>
+
+        <div class="features-section" id="featuresSection">
+            <h3 class="section-heading">What Makes NeuroGen Intelligent?</h3>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🔍</div>
+                    <h4>RAG-Powered Analysis</h4>
+                    <p>Retrieval-Augmented Generation extracts topic priorities and patterns from your uploaded PDFs with deep contextual understanding.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📐</div>
+                    <h4>Smart Pattern Design</h4>
+                    <p>Adaptive algorithms distribute marks across Bloom's Taxonomy levels, ensuring balanced and pedagogically sound question papers.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">💬</div>
+                    <h4>Chat-Driven Customisation</h4>
+                    <p>Converse with an AI agent to refine sections, adjust mark distribution, and regenerate specific parts — all in natural language.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📄</div>
+                    <h4>One-Click PDF Export</h4>
+                    <p>Generate a professionally formatted, print-ready PDF with your institution's header and logo in a single click.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎯</div>
+                    <h4>Priority Scoring</h4>
+                    <p>Frequency analysis of previous year questions surfaces high-priority topics, ensuring your paper reflects real exam trends.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h4>Bring Your Own Key</h4>
+                    <p>Use your own Groq API key for full control. Your data stays with you — no third-party storage of your syllabus or papers.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="how-it-works">
+            <h3 class="section-heading">How It Works</h3>
+            <div class="steps-row">
+                <div class="step-card">
+                    <div class="step-number">01</div>
+                    <h4>Upload Documents</h4>
+                    <p>Provide your syllabus text, previous year question PDFs, and an optional reference pattern.</p>
+                </div>
+                <div class="step-arrow">→</div>
+                <div class="step-card">
+                    <div class="step-number">02</div>
+                    <h4>AI Analyses</h4>
+                    <p>The RAG pipeline extracts topics, scores priorities, and detects the exam pattern from your files.</p>
+                </div>
+                <div class="step-arrow">→</div>
+                <div class="step-card">
+                    <div class="step-number">03</div>
+                    <h4>Design & Refine</h4>
+                    <p>Use the Blueprint Studio and AI chat to customise sections, marks, and topic coverage.</p>
+                </div>
+                <div class="step-arrow">→</div>
+                <div class="step-card">
+                    <div class="step-number">04</div>
+                    <h4>Generate & Export</h4>
+                    <p>Generate the final paper and download a polished, institution-ready PDF.</p>
+                </div>
+            </div>
+        </div>
+
+        <footer class="home-footer">
+            <span>🧠 NeuroGen Studio</span>
+            <span class="footer-links">
+                <a href="#" id="footerAboutBtn" class="footer-link">About & Algorithms</a>
+                <a href="#" id="footerGetStartedBtn" class="footer-link">Get Started</a>
+            </span>
+            <span class="text-muted">Built with Groq · LangChain · Flask · Vite</span>
+        </footer>
+    </div>
+
+    <!-- 1. ABOUT PAGE (Hidden Initially) -->
+    <div id="aboutPage" class="page-container hidden">
+        <nav class="main-nav">
+            <h1 class="logo">🧠 NeuroGen <span class="highlight">Studio</span></h1>
+            <div class="nav-links">
+                <a href="#" class="nav-link" id="aboutNavHomeBtn">Home</a>
+                <a href="#" class="nav-link active" id="aboutNavAboutBtn">About</a>
+                <a href="#" class="nav-link nav-cta" id="aboutNavGetStartedBtn">Get Started →</a>
+            </div>
+        </nav>
+
+        <div class="about-content">
+            <div class="about-hero">
+                <div class="home-badge">📖 Technical Overview</div>
+                <h2 class="home-title" style="font-size:2.5rem;">Algorithms &amp; Architecture</h2>
+                <p class="home-subtitle">
+                    A deep dive into how NeuroGen Studio analyses question papers,
+                    generates new questions, and leverages the RAG model approach.
+                </p>
+            </div>
+
+            <!-- ===== SECTION 1: Paper Analysis ===== -->
+            <section class="about-section">
+                <div class="about-section-header">
+                    <span class="about-section-icon">🔍</span>
+                    <h3>Paper Analysis Algorithms</h3>
+                </div>
+                <p class="about-section-intro">
+                    NeuroGen employs a multi-stage analysis pipeline to understand your syllabus and
+                    previous year question (PYQ) papers before generating anything.
+                </p>
+
+                <div class="algo-cards">
+                    <div class="algo-card">
+                        <h4>📄 PDF Text Extraction</h4>
+                        <p>
+                            Uploaded PDFs are parsed using <strong>PyPDF2</strong> and <strong>PyMuPDF (fitz)</strong>.
+                            Both libraries are used in tandem: PyMuPDF handles scanned/image PDFs with better
+                            layout fidelity, while PyPDF2 handles digital PDFs. Raw text is cleaned, normalised,
+                            and passed downstream.
+                        </p>
+                        <div class="algo-tags">
+                            <span class="algo-tag">PyPDF2</span>
+                            <span class="algo-tag">PyMuPDF</span>
+                            <span class="algo-tag">Text Normalisation</span>
+                        </div>
+                    </div>
+
+                    <div class="algo-card">
+                        <h4>🏷️ Topic Extraction &amp; Classification</h4>
+                        <p>
+                            Extracted text is sent to a <strong>Groq LLM (llama-3.1-8b-instant)</strong> with a
+                            structured prompt that instructs the model to identify and classify syllabus topics
+                            by module. The LLM returns a structured JSON mapping of module names to their topics,
+                            which is then stored for downstream use.
+                        </p>
+                        <div class="algo-tags">
+                            <span class="algo-tag">Groq LLM</span>
+                            <span class="algo-tag">Structured Prompting</span>
+                            <span class="algo-tag">JSON Extraction</span>
+                        </div>
+                    </div>
+
+                    <div class="algo-card">
+                        <h4>📊 Priority Scoring Algorithm</h4>
+                        <p>
+                            Each topic is scored by analysing its <strong>frequency of appearance</strong> across
+                            all uploaded PYQ papers. The algorithm counts how many times related terms appear
+                            within each PYQ, normalises these counts, and produces a <em>priority score</em>
+                            between 0 and 1. High-priority topics receive a larger share of questions in the
+                            generated paper.
+                        </p>
+                        <div class="algo-steps">
+                            <div class="algo-step"><span class="step-dot"></span>Term frequency counting per PYQ</div>
+                            <div class="algo-step"><span class="step-dot"></span>Cross-paper aggregation</div>
+                            <div class="algo-step"><span class="step-dot"></span>Min-max normalisation → priority score</div>
+                            <div class="algo-step"><span class="step-dot"></span>Score-based topic allocation</div>
+                        </div>
+                    </div>
+
+                    <div class="algo-card">
+                        <h4>🗂️ Pattern Recognition</h4>
+                        <p>
+                            If a reference question paper PDF is provided, the LLM parses its structure and
+                            infers the exam pattern: section names, marks per question, number of questions,
+                            and questions to attempt. The header (institution name, exam year, subject, etc.)
+                            is also extracted and pre-filled in the Studio for convenience.
+                        </p>
+                        <div class="algo-tags">
+                            <span class="algo-tag">Structural Parsing</span>
+                            <span class="algo-tag">LLM Inference</span>
+                            <span class="algo-tag">Header Extraction</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===== SECTION 2: RAG Model ===== -->
+            <section class="about-section">
+                <div class="about-section-header">
+                    <span class="about-section-icon">🧠</span>
+                    <h3>RAG Model Approach</h3>
+                </div>
+                <p class="about-section-intro">
+                    NeuroGen Studio is built on <strong>Retrieval-Augmented Generation (RAG)</strong> — a
+                    technique that grounds LLM outputs in your actual documents rather than relying solely
+                    on the model's parametric knowledge.
+                </p>
+
+                <div class="rag-pipeline">
+                    <div class="rag-stage">
+                        <div class="rag-stage-icon">📥</div>
+                        <div class="rag-stage-label">Ingest</div>
+                        <div class="rag-stage-desc">PDFs are parsed into clean text chunks and stored in memory as a retrieval corpus.</div>
+                    </div>
+                    <div class="rag-arrow">→</div>
+                    <div class="rag-stage">
+                        <div class="rag-stage-icon">🔎</div>
+                        <div class="rag-stage-label">Retrieve</div>
+                        <div class="rag-stage-desc">When generating questions, relevant topic passages are retrieved from the PYQ corpus using keyword and semantic matching.</div>
+                    </div>
+                    <div class="rag-arrow">→</div>
+                    <div class="rag-stage">
+                        <div class="rag-stage-icon">🔗</div>
+                        <div class="rag-stage-label">Augment</div>
+                        <div class="rag-stage-desc">Retrieved passages are injected into the LLM prompt as grounding context, anchoring generation to real exam content.</div>
+                    </div>
+                    <div class="rag-arrow">→</div>
+                    <div class="rag-stage">
+                        <div class="rag-stage-icon">✨</div>
+                        <div class="rag-stage-label">Generate</div>
+                        <div class="rag-stage-desc">The LLM produces novel, contextually grounded questions that reflect true exam style and topic distribution.</div>
+                    </div>
+                </div>
+
+                <div class="algo-cards" style="margin-top:2rem;">
+                    <div class="algo-card">
+                        <h4>Why RAG over pure LLM generation?</h4>
+                        <p>
+                            A standalone LLM generates questions based on training data alone, which may not
+                            reflect the specific style, difficulty, or topic distribution of your institution's
+                            exams. RAG anchors generation in <em>your</em> documents, producing questions that
+                            are more relevant, diverse, and appropriately levelled.
+                        </p>
+                    </div>
+                    <div class="algo-card">
+                        <h4>LangChain Integration</h4>
+                        <p>
+                            The retrieval and prompt-chaining pipeline is orchestrated using
+                            <strong>LangChain</strong>. LangChain manages document loading, text splitting,
+                            prompt templates, and LLM chains, providing a modular pipeline that is easy to
+                            extend and maintain.
+                        </p>
+                        <div class="algo-tags">
+                            <span class="algo-tag">LangChain</span>
+                            <span class="algo-tag">Prompt Templates</span>
+                            <span class="algo-tag">LLM Chains</span>
+                        </div>
+                    </div>
+                    <div class="algo-card">
+                        <h4>Chat Agent (Conversational RAG)</h4>
+                        <p>
+                            The Studio's chat interface uses a <strong>conversational RAG agent</strong> that
+                            maintains a context window containing the current syllabus topics and exam pattern.
+                            Each user message is augmented with this context before being sent to the LLM,
+                            enabling coherent, multi-turn dialogue about the paper structure.
+                        </p>
+                        <div class="algo-tags">
+                            <span class="algo-tag">Conversational Context</span>
+                            <span class="algo-tag">Multi-turn Dialogue</span>
+                            <span class="algo-tag">Pattern Updates</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===== SECTION 3: Question Generation ===== -->
+            <section class="about-section">
+                <div class="about-section-header">
+                    <span class="about-section-icon">📐</span>
+                    <h3>Question Generation Algorithms</h3>
+                </div>
+                <p class="about-section-intro">
+                    Once topics are analysed and the exam pattern is defined, NeuroGen orchestrates
+                    a multi-step generation pipeline to produce a complete, balanced question paper.
+                </p>
+
+                <div class="algo-cards">
+                    <div class="algo-card">
+                        <h4>📋 Topic-Based Allocation</h4>
+                        <p>
+                            Questions are allocated to topics proportionally based on their
+                            <strong>priority scores</strong> and the total number of questions required by
+                            the pattern. Topics with higher priority scores receive more questions,
+                            while every topic in the syllabus receives at least one question to ensure
+                            full coverage.
+                        </p>
+                        <div class="algo-steps">
+                            <div class="algo-step"><span class="step-dot"></span>Compute priority-weighted question counts</div>
+                            <div class="algo-step"><span class="step-dot"></span>Floor allocation + remainder distribution</div>
+                            <div class="algo-step"><span class="step-dot"></span>Guarantee minimum 1 question per topic</div>
+                        </div>
+                    </div>
+
+                    <div class="algo-card">
+                        <h4>⚖️ Marks Distribution</h4>
+                        <p>
+                            Each section's marks-per-question and question count are respected strictly.
+                            The generator verifies that the sum of attempted questions × marks equals the
+                            expected section total, raising an error if the pattern is inconsistent
+                            before proceeding.
+                        </p>
+                        <div class="algo-tags">
+                            <span class="algo-tag">Pattern Validation</span>
+                            <span class="algo-tag">Constraint Satisfaction</span>
+                        </div>
+                    </div>
+
+                    <div class="algo-card">
+                        <h4>🎓 Bloom's Taxonomy Integration</h4>
+                        <p>
+                            Questions are generated across multiple cognitive levels to ensure a
+                            pedagogically balanced paper. Short-answer questions target
+                            <em>Remember / Understand</em> levels, while long-answer questions target
+                            <em>Apply / Analyse / Evaluate / Create</em> levels, guided by the
+                            LLM prompt design.
+                        </p>
+                        <div class="algo-tags">
+                            <span class="algo-tag">Remember</span>
+                            <span class="algo-tag">Understand</span>
+                            <span class="algo-tag">Apply</span>
+                            <span class="algo-tag">Analyse</span>
+                            <span class="algo-tag">Evaluate</span>
+                            <span class="algo-tag">Create</span>
+                        </div>
+                    </div>
+
+                    <div class="algo-card">
+                        <h4>🌀 Diversity Optimisation</h4>
+                        <p>
+                            To avoid repetitive questions, each generation prompt includes the previously
+                            generated questions as negative examples. The LLM is instructed to produce
+                            questions that are semantically distinct, ensuring variety in phrasing,
+                            scope, and assessed skill.
+                        </p>
+                        <div class="algo-tags">
+                            <span class="algo-tag">Negative Prompting</span>
+                            <span class="algo-tag">Semantic Diversity</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===== SECTION 4: Tech Stack ===== -->
+            <section class="about-section">
+                <div class="about-section-header">
+                    <span class="about-section-icon">🛠️</span>
+                    <h3>Technology Stack</h3>
+                </div>
+                <div class="tech-grid">
+                    <div class="tech-item"><span class="tech-name">Groq API</span><span class="tech-desc">Ultra-fast LLM inference (llama-3.1-8b-instant)</span></div>
+                    <div class="tech-item"><span class="tech-name">LangChain</span><span class="tech-desc">RAG pipeline, prompt templates &amp; LLM chains</span></div>
+                    <div class="tech-item"><span class="tech-name">Flask</span><span class="tech-desc">Python REST API backend</span></div>
+                    <div class="tech-item"><span class="tech-name">PyMuPDF</span><span class="tech-desc">High-fidelity PDF text extraction</span></div>
+                    <div class="tech-item"><span class="tech-name">fpdf2</span><span class="tech-desc">Programmatic PDF generation</span></div>
+                    <div class="tech-item"><span class="tech-name">Vite + Vanilla JS</span><span class="tech-desc">Fast, lightweight frontend</span></div>
+                    <div class="tech-item"><span class="tech-name">GSAP</span><span class="tech-desc">Smooth UI animations</span></div>
+                    <div class="tech-item"><span class="tech-name">Netlify + Render</span><span class="tech-desc">Frontend &amp; backend hosting</span></div>
+                </div>
+            </section>
+        </div>
+
+        <footer class="home-footer">
+            <span>🧠 NeuroGen Studio</span>
+            <span class="footer-links">
+                <a href="#" id="aboutFooterHomeBtn" class="footer-link">Home</a>
+                <a href="#" id="aboutFooterStartedBtn" class="footer-link">Get Started</a>
+            </span>
+            <span class="text-muted">Built with Groq · LangChain · Flask · Vite</span>
+        </footer>
+    </div>
+
+    <!-- 2. UPLOAD / GET STARTED PAGE (Hidden Initially) -->
+    <div id="landingPage" class="landing-container hidden">
+        <nav class="main-nav">
+            <h1 class="logo">🧠 NeuroGen <span class="highlight">Studio</span></h1>
+            <div class="nav-links">
+                <a href="#" class="nav-link" id="uploadNavHomeBtn">Home</a>
+                <a href="#" class="nav-link" id="uploadNavAboutBtn">About</a>
+            </div>
         </nav>
 
         <div class="hero-section">
@@ -55,7 +440,7 @@
         </div>
     </div>
 
-    <!-- 2. STUDIO INTERFACE (Hidden Initially) -->
+    <!-- 3. STUDIO INTERFACE (Hidden Initially) -->
     <div id="studioPage" class="studio-container hidden">
         <!-- LEFT PANEL: Chat & Controls -->
         <aside class="studio-left">

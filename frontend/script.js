@@ -15,13 +15,46 @@ const apiBase = "https://question-paper-generator-jg4p.onrender.com/api";
 // const apiBase = "http://127.0.0.1:5000/api"; // Local Debug
 
 // DOM Elements
+const homePage = document.getElementById('homePage');
+const aboutPage = document.getElementById('aboutPage');
 const landingPage = document.getElementById('landingPage');
 const studioPage = document.getElementById('studioPage');
 const loader = document.getElementById('loader');
 const loadingText = document.getElementById('loadingText');
 
 // ==========================================
-// 1. LANDING PAGE LOGIC
+// PAGE NAVIGATION HELPERS
+// ==========================================
+function showPage(pageEl) {
+    [homePage, aboutPage, landingPage, studioPage].forEach(p => p.classList.add('hidden'));
+    pageEl.classList.remove('hidden');
+    window.scrollTo(0, 0);
+}
+
+// Home page navigation
+document.getElementById('navHomeBtn').addEventListener('click', (e) => { e.preventDefault(); showPage(homePage); });
+document.getElementById('navAboutBtn').addEventListener('click', (e) => { e.preventDefault(); showPage(aboutPage); });
+document.getElementById('navGetStartedBtn').addEventListener('click', (e) => { e.preventDefault(); showPage(landingPage); });
+document.getElementById('homeGetStartedBtn').addEventListener('click', () => showPage(landingPage));
+document.getElementById('homeLearnMoreBtn').addEventListener('click', () => {
+    document.getElementById('featuresSection').scrollIntoView({ behavior: 'smooth' });
+});
+document.getElementById('footerAboutBtn').addEventListener('click', (e) => { e.preventDefault(); showPage(aboutPage); });
+document.getElementById('footerGetStartedBtn').addEventListener('click', (e) => { e.preventDefault(); showPage(landingPage); });
+
+// About page navigation
+document.getElementById('aboutNavHomeBtn').addEventListener('click', (e) => { e.preventDefault(); showPage(homePage); });
+document.getElementById('aboutNavAboutBtn').addEventListener('click', (e) => { e.preventDefault(); showPage(aboutPage); });
+document.getElementById('aboutNavGetStartedBtn').addEventListener('click', (e) => { e.preventDefault(); showPage(landingPage); });
+document.getElementById('aboutFooterHomeBtn').addEventListener('click', (e) => { e.preventDefault(); showPage(homePage); });
+document.getElementById('aboutFooterStartedBtn').addEventListener('click', (e) => { e.preventDefault(); showPage(landingPage); });
+
+// Upload page navigation
+document.getElementById('uploadNavHomeBtn').addEventListener('click', (e) => { e.preventDefault(); showPage(homePage); });
+document.getElementById('uploadNavAboutBtn').addEventListener('click', (e) => { e.preventDefault(); showPage(aboutPage); });
+
+// ==========================================
+// 1. UPLOAD / GET STARTED PAGE LOGIC
 // ==========================================
 document.getElementById('analyzeBtn').addEventListener('click', async () => {
     const apiKey = document.getElementById('apiKey').value;
@@ -66,8 +99,7 @@ document.getElementById('analyzeBtn').addEventListener('click', async () => {
         state.currentPattern = data.paper_pattern || getDefaultPattern();
 
         // Transition to Studio
-        landingPage.classList.add('hidden');
-        studioPage.classList.remove('hidden');
+        showPage(studioPage);
 
         // Init Studio
         initStudio();
@@ -126,8 +158,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 
 document.getElementById('backToHomeBtn').addEventListener('click', () => {
     if (confirm("Exit Studio? All progress will be lost.")) {
-        studioPage.classList.add('hidden');
-        landingPage.classList.remove('hidden');
+        showPage(homePage);
     }
 });
 
