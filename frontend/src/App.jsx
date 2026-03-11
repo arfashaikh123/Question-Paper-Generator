@@ -1,67 +1,78 @@
-import React, { useState, useEffect } from 'react';
-import Background from './components/Background';
+import { useState } from 'react';
+import BackgroundCanvas from './components/BackgroundCanvas';
+import Loader from './components/Loader';
 import HomePage from './pages/HomePage';
 import AboutPage from './pages/AboutPage';
-import LandingPage from './pages/LandingPage';
-import Studio from './pages/Studio'; // We'll create this next
+import UploadPage from './pages/UploadPage';
+import StudioPage from './pages/StudioPage';
 
-function App() {
+export default function App() {
   const [currentPage, setCurrentPage] = useState('home');
+  const [loaderVisible, setLoaderVisible] = useState(false);
+  const [loaderText, setLoaderText] = useState('Processing...');
+
+  // Shared state passed from Upload → Studio
+  const [apiKey, setApiKey] = useState(null);
   const [analysisData, setAnalysisData] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [loadingText, setLoadingText] = useState('Processing...');
+  const [currentPattern, setCurrentPattern] = useState(null);
 
   const navigate = (page) => {
     setCurrentPage(page);
+    window.scrollTo(0, 0);
   };
 
-  const handleAnalyze = async (formData) => {
-    setIsLoading(true);
-    setLoadingText('Analyzing Documents...');
+  const showLoader = (text) => {
+    setLoaderText(text);
+    setLoaderVisible(true);
+  };
 
-    const apiBase = 'http://localhost:5000'; // Adjust as needed
-    const data = new FormData();
-    data.append('syllabus_text', formData.syllabusText);
-    for (let i = 0; i < formData.pyqFiles.length; i++) {
-      data.append('pyq_files', formData.pyqFiles[i]);
-    }
-    if (formData.referenceFile) {
-      data.append('reference_file', formData.referenceFile);
-    }
+  const hideLoader = () => {
+    setLoaderVisible(false);
+  };
 
-    try {
-      const response = await fetch(`${apiBase}/analyze`, {
-        method: 'POST',
-        body: data
-      });
-      const result = await response.json();
-      if (result.error) throw new Error(result.error);
+  const handleAnalysisComplete = ({ apiKey: key, analysisData: data, currentPattern: pattern }) => {
+    setApiKey(key);
+    setAnalysisData(data);
+    setCurrentPattern(pattern);
+    navigate('studio');
+  };
 
-      setAnalysisData(result);
-      setCurrentPage('studio');
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setIsLoading(false);
+  const renderPage = () => {
+    switch (currentPage) {
+      case 'home':
+        return <HomePage onNavigate={navigate} />;
+      case 'about':
+        return <AboutPage onNavigate={navigate} />;
+      case 'upload':
+        return (
+          <UploadPage
+            onNavigate={navigate}
+            onAnalysisComplete={handleAnalysisComplete}
+            showLoader={showLoader}
+            hideLoader={hideLoader}
+          />
+        );
+      case 'studio':
+        return (
+          <StudioPage
+            apiKey={apiKey}
+            analysisData={analysisData}
+            initialPattern={currentPattern}
+            onNavigate={navigate}
+            showLoader={showLoader}
+            hideLoader={hideLoader}
+          />
+        );
+      default:
+        return <HomePage onNavigate={navigate} />;
     }
   };
 
   return (
     <>
-      <Background />
-      {currentPage === 'home' && <HomePage onNavigate={navigate} />}
-      {currentPage === 'about' && <AboutPage onNavigate={navigate} />}
-      {currentPage === 'landing' && <LandingPage onNavigate={navigate} onAnalyze={handleAnalyze} />}
-      {currentPage === 'studio' && <Studio onNavigate={navigate} analysisData={analysisData} />}
-
-      {isLoading && (
-        <div id="loader" className="loader">
-          <div className="spinner"></div>
-          <p>{loadingText}</p>
-        </div>
-      )}
+      <BackgroundCanvas />
+      {renderPage()}
+      <Loader visible={loaderVisible} text={loaderText} />
     </>
   );
 }
-
-export default App;
