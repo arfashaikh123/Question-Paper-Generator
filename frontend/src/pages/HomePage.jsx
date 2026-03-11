@@ -7,7 +7,7 @@ export default function HomePage({ onNavigate }) {
       <Navbar activePage="home" onNavigate={onNavigate} />
 
       <div className="home-hero">
-        <div className="home-badge">✨ Powered by Groq + LangChain RAG</div>
+        <div className="home-badge">✨ Powered by AI + LangChain RAG</div>
         <h2 className="home-title">Design Intelligent<br />Question Papers.</h2>
         <p className="home-subtitle">
           Upload your syllabus and previous year questions. Our AI analyses topic priorities,
@@ -58,8 +58,8 @@ export default function HomePage({ onNavigate }) {
           </div>
           <div className="feature-card">
             <div className="feature-icon">🔒</div>
-            <h4>Bring Your Own Key</h4>
-            <p>Use your own Groq API key for full control. Your data stays with you — no third-party storage of your syllabus or papers.</p>
+            <h4>Privacy First</h4>
+            <p>Your data stays with you — no third-party storage of your syllabus or papers. Full control over your content at all times.</p>
           </div>
         </div>
       </div>

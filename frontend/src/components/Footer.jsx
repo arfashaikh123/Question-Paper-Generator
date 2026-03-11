@@ -14,7 +14,7 @@ export default function Footer({ onNavigate, links }) {
           </a>
         ))}
       </span>
-      <span className="text-muted">Built with Groq · LangChain · Flask · Vite</span>
+      <span className="text-muted">Built with AI · LangChain · Flask · Vite</span>
     </footer>
   );
 }

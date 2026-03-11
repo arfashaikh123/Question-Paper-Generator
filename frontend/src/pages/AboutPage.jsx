@@ -46,13 +46,13 @@ export default function AboutPage({ onNavigate }) {
             <div className="algo-card">
               <h4>🏷️ Topic Extraction &amp; Classification</h4>
               <p>
-                Extracted text is sent to a <strong>Groq LLM (llama-3.1-8b-instant)</strong> with a
+                Extracted text is sent to an <strong>LLM</strong> with a
                 structured prompt that instructs the model to identify and classify syllabus topics
                 by module. The LLM returns a structured JSON mapping of module names to their topics,
                 which is then stored for downstream use.
               </p>
               <div className="algo-tags">
-                <span className="algo-tag">Groq LLM</span>
+                <span className="algo-tag">LLM</span>
                 <span className="algo-tag">Structured Prompting</span>
                 <span className="algo-tag">JSON Extraction</span>
               </div>
@@ -255,7 +255,7 @@ export default function AboutPage({ onNavigate }) {
             <h3>Technology Stack</h3>
           </div>
           <div className="tech-grid">
-            <div className="tech-item"><span className="tech-name">Groq API</span><span className="tech-desc">Ultra-fast LLM inference (llama-3.1-8b-instant)</span></div>
+            <div className="tech-item"><span className="tech-name">LLM Engine</span><span className="tech-desc">High-performance LLM inference for question generation</span></div>
             <div className="tech-item"><span className="tech-name">LangChain</span><span className="tech-desc">RAG pipeline, prompt templates &amp; LLM chains</span></div>
             <div className="tech-item"><span className="tech-name">Flask</span><span className="tech-desc">Python REST API backend</span></div>
             <div className="tech-item"><span className="tech-name">PyMuPDF</span><span className="tech-desc">High-fidelity PDF text extraction</span></div>
