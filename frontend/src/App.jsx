@@ -1,35 +1,67 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import React, { useState, useEffect } from 'react';
+import Background from './components/Background';
+import HomePage from './pages/HomePage';
+import AboutPage from './pages/AboutPage';
+import LandingPage from './pages/LandingPage';
+import Studio from './pages/Studio'; // We'll create this next
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [currentPage, setCurrentPage] = useState('home');
+  const [analysisData, setAnalysisData] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingText, setLoadingText] = useState('Processing...');
+
+  const navigate = (page) => {
+    setCurrentPage(page);
+  };
+
+  const handleAnalyze = async (formData) => {
+    setIsLoading(true);
+    setLoadingText('Analyzing Documents...');
+
+    const apiBase = 'http://localhost:5000'; // Adjust as needed
+    const data = new FormData();
+    data.append('syllabus_text', formData.syllabusText);
+    for (let i = 0; i < formData.pyqFiles.length; i++) {
+      data.append('pyq_files', formData.pyqFiles[i]);
+    }
+    if (formData.referenceFile) {
+      data.append('reference_file', formData.referenceFile);
+    }
+
+    try {
+      const response = await fetch(`${apiBase}/analyze`, {
+        method: 'POST',
+        body: data
+      });
+      const result = await response.json();
+      if (result.error) throw new Error(result.error);
+
+      setAnalysisData(result);
+      setCurrentPage('studio');
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
+      <Background />
+      {currentPage === 'home' && <HomePage onNavigate={navigate} />}
+      {currentPage === 'about' && <AboutPage onNavigate={navigate} />}
+      {currentPage === 'landing' && <LandingPage onNavigate={navigate} onAnalyze={handleAnalyze} />}
+      {currentPage === 'studio' && <Studio onNavigate={navigate} analysisData={analysisData} />}
+
+      {isLoading && (
+        <div id="loader" className="loader">
+          <div className="spinner"></div>
+          <p>{loadingText}</p>
+        </div>
+      )}
     </>
-  )
+  );
 }
 
-export default App
+export default App;
