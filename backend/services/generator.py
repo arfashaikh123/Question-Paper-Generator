@@ -1,14 +1,33 @@
-from groq import Groq
+from services.llm_client import get_client, get_model, DEFAULT_PROVIDER
 
 import random
 
-def generate_paper_content(allocation, api_key, paper_pattern=None, priority_scores=None):
+def generate_paper_content(
+    allocation,
+    api_key,
+    paper_pattern=None,
+    priority_scores=None,
+    provider=DEFAULT_PROVIDER,
+    model=None,
+    base_url=None,
+):
     """
-    Generates question paper.
-    If paper_pattern is provided, follows that structure.
-    Otherwise uses topic allocation.
+    Generates question paper content.
+
+    If paper_pattern is provided, follows that structure (Mode 1).
+    Otherwise uses topic allocation (Mode 2).
+
+    Args:
+        allocation:      Dict mapping topic -> question count.
+        api_key:         API key for the chosen LLM provider.
+        paper_pattern:   Optional section-based pattern dict.
+        priority_scores: Optional topic priority scores.
+        provider:        LLM provider ('groq', 'ollama', or 'openai_compatible').
+        model:           Model name; falls back to the provider's default.
+        base_url:        Override the provider's base URL for custom deployments.
     """
-    client = Groq(api_key=api_key)
+    client = get_client(provider=provider, api_key=api_key, base_url=base_url)
+    selected_model = get_model(provider=provider, model=model)
     final_questions = []
 
     # MODE 1: Strict Pattern Matching (Reference Paper)
@@ -41,7 +60,7 @@ def generate_paper_content(allocation, api_key, paper_pattern=None, priority_sco
             
             try:
                 response = client.chat.completions.create(
-                    model="llama-3.1-8b-instant",
+                    model=selected_model,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.7,
                     max_tokens=1000
@@ -69,7 +88,7 @@ def generate_paper_content(allocation, api_key, paper_pattern=None, priority_sco
 
             try:
                 response = client.chat.completions.create(
-                    model="llama-3.1-8b-instant",
+                    model=selected_model,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.7,
                     max_tokens=800

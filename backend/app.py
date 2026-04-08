@@ -1,18 +1,20 @@
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import os
+import sys
 import tempfile
 from werkzeug.utils import secure_filename
 from services.analyzer import analyze_syllabus_and_pyqs, extract_text_from_pdf
 from services.generator import generate_paper_content
 from services.pdf_maker import create_pdf
 from services.chat_agent import ChatAgent
+from services.llm_client import PROVIDERS
 
 chat_agent = ChatAgent()
 
 # --- CONFIGURATION ---
 # TODO: Replace with your actual Groq API Key
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+DEFAULT_API_KEY = os.getenv("GROQ_API_KEY") or os.getenv("LLM_API_KEY")
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
@@ -21,10 +23,13 @@ def analyze():
     try:
         data = request.form
         syllabus_text = data.get('syllabus_text')
-        # Use provided key or fallback to hardcoded key
-        api_key = data.get('api_key') or GROQ_API_KEY
+        # Use provided key or fallback to environment variable
+        api_key = data.get('api_key') or DEFAULT_API_KEY
+        provider = data.get('provider', 'groq')
+        model = data.get('model') or None
+        base_url = data.get('base_url') or None
         
-        if not syllabus_text or not api_key:
+        if not syllabus_text or (not api_key and PROVIDERS.get(provider, {}).get("requires_api_key", False)):
             return jsonify({"error": "Missing syllabus text or API key"}), 400
         
         pyq_files = request.files.getlist('pyq_files')
@@ -54,7 +59,10 @@ def analyze():
                     os.remove(ref_path)
 
         # Analyze
-        result = analyze_syllabus_and_pyqs(syllabus_text, temp_pyq_paths, api_key, reference_text)
+        result = analyze_syllabus_and_pyqs(
+            syllabus_text, temp_pyq_paths, api_key, reference_text,
+            provider=provider, model=model, base_url=base_url,
+        )
         
         # Cleanup temp files
         for path in temp_pyq_paths:
@@ -73,17 +81,24 @@ def analyze():
 def generate():
     try:
         data = request.json
-        api_key = data.get('api_key') or GROQ_API_KEY
+        api_key = data.get('api_key') or DEFAULT_API_KEY
         allocation = data.get('allocation')
-        # New optional params
+        # Optional provider config
+        provider = data.get('provider', 'groq')
+        model = data.get('model') or None
+        base_url = data.get('base_url') or None
+        # Pattern-based params
         paper_pattern = data.get('paper_pattern')
         priority_scores = data.get('priority_scores')
         
-        if not api_key:
+        if not api_key and PROVIDERS.get(provider, {}).get("requires_api_key", False):
             return jsonify({"error": "Missing API key"}), 400
             
         # Generate Text Content
-        paper_text = generate_paper_content(allocation, api_key, paper_pattern, priority_scores)
+        paper_text = generate_paper_content(
+            allocation, api_key, paper_pattern, priority_scores,
+            provider=provider, model=model, base_url=base_url,
+        )
         
         return jsonify({"paper_text": paper_text})
 
@@ -108,7 +123,7 @@ def download_pdf():
         if header_text_raw:
             # Use the ChatAgent to perfect the header
              # We need a key for this agent interaction. Use global or from request.
-            api_key = GROQ_API_KEY 
+            api_key = DEFAULT_API_KEY 
             polished_header = chat_agent.refine_header_text(header_text_raw, api_key)
 
         # Handle Header Image
@@ -153,14 +168,20 @@ def download_pdf():
 def chat():
     try:
         data = request.json
-        api_key = data.get('api_key') or GROQ_API_KEY
+        api_key = data.get('api_key') or DEFAULT_API_KEY
         message = data.get('message')
         context = data.get('context', {})
+        provider = data.get('provider', 'groq')
+        model = data.get('model') or None
+        base_url = data.get('base_url') or None
         
-        if not api_key or not message:
+        if (not api_key and PROVIDERS.get(provider, {}).get("requires_api_key", False)) or not message:
             return jsonify({"error": "Missing API key or message"}), 400
             
-        response = chat_agent.process_message(message, context, api_key)
+        response = chat_agent.process_message(
+            message, context, api_key,
+            provider=provider, model=model, base_url=base_url,
+        )
         return jsonify(response)
 
     except Exception as e:

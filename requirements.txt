@@ -1,8 +1,12 @@
 streamlit==1.32.0
 PyPDF2==3.0.1
-langchain-groq==0.0.1
+langchain-openai
 langchain-core==0.1.30
 python-dotenv==1.0.1
-groq
+openai
 pymupdf
 fpdf
+# Optional: required only for the "Local Custom Model (Transformers)" provider
+langchain-huggingface
+# torch and transformers must also be installed separately for local models:
+#   pip install torch transformers

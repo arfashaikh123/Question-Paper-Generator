@@ -1,9 +1,14 @@
 import streamlit as st
 import re
+import sys
+import os
 from collections import defaultdict
-from groq import Groq
 from langchain_community.document_loaders import PyPDFLoader
 from fpdf import FPDF
+
+# Add project root to path so we can import llm_providers
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from llm_providers import PROVIDERS, DEFAULT_PROVIDER, get_openai_client, get_default_model
 
 # =====================================================
 # PAGE CONFIG
@@ -15,11 +20,77 @@ st.title("📊 Explainable Algorithmic Question Paper Generator")
 st.markdown("Priority = 0.6 × Syllabus Weight + 0.4 × PYQ Frequency")
 
 # =====================================================
-# SIDEBAR INPUTS
+# SIDEBAR INPUTS – LLM Configuration
 # =====================================================
 
-st.sidebar.header("🔐 Groq API Key")
-groq_key = st.sidebar.text_input("Enter Groq API Key", type="password")
+st.sidebar.header("🤖 LLM Configuration")
+
+provider_options = {v["name"]: k for k, v in PROVIDERS.items()
+                   if k not in ("local_transformers", "custom_callable")}
+# Exclude providers that are not HTTP-based: local_transformers loads weights
+# in-process via transformers, and custom_callable invokes a local Python
+# callable.  Both require get_langchain_llm() rather than get_openai_client().
+selected_provider_name = st.sidebar.selectbox(
+    "LLM Provider",
+    list(provider_options.keys()),
+    help=(
+        "Choose the language model backend. "
+        "Groq is a fast cloud option; Ollama lets you run models locally; "
+        "Hugging Face Hub allows using your fine-tuned models from HF Hub; "
+        "the custom option works with any OpenAI-compatible server."
+    ),
+)
+provider = provider_options[selected_provider_name]
+provider_config = PROVIDERS[provider]
+
+st.sidebar.caption(provider_config["description"])
+
+# API Key
+api_key = ""
+if provider_config["requires_api_key"]:
+    key_label = (
+        "Hugging Face Token"
+        if provider == "huggingface_hub"
+        else f"{selected_provider_name} API Key"
+    )
+    api_key = st.sidebar.text_input(key_label, type="password")
+    env_var = (
+        "GROQ_API_KEY" if provider == "groq"
+        else "HF_TOKEN" if provider == "huggingface_hub"
+        else "LLM_API_KEY"
+    )
+    if not api_key and env_var in os.environ:
+        api_key = os.environ[env_var]
+else:
+    api_key = st.sidebar.text_input(
+        "API Key (optional)", type="password",
+        help="Leave blank if the server does not require authentication."
+    )
+
+# Base URL (for providers that expose a configurable endpoint)
+if provider in ("ollama", "openai_compatible"):
+    base_url = st.sidebar.text_input(
+        "Base URL",
+        value=provider_config["base_url"],
+    )
+elif provider == "huggingface_hub":
+    base_url = provider_config["base_url"]
+else:
+    base_url = provider_config["base_url"]
+
+# Model
+if provider == "groq":
+    model = st.sidebar.selectbox("Model", provider_config["models"])
+elif provider == "huggingface_hub":
+    model = st.sidebar.text_input(
+        "HF Model ID",
+        help="e.g. 'username/my-finetuned-llama'",
+    )
+else:
+    model = st.sidebar.text_input(
+        "Model Name",
+        value=provider_config["default_model"],
+    )
 
 st.sidebar.header("📚 Paste Syllabus Text")
 
@@ -148,8 +219,12 @@ def generate_pdf(text):
 
 if generate_button:
 
-    if not groq_key:
-        st.error("Enter Groq API Key")
+    if provider_config["requires_api_key"] and not api_key:
+        st.error(f"Enter {selected_provider_name} API Key / Token")
+        st.stop()
+
+    if not model:
+        st.error("Enter a model name or ID to proceed.")
         st.stop()
 
     if not syllabus_text_input:
@@ -160,7 +235,9 @@ if generate_button:
         st.error("Upload previous year papers")
         st.stop()
 
-    client = Groq(api_key=groq_key)
+    # Build a provider-agnostic OpenAI-compatible client
+    client = get_openai_client(provider=provider, api_key=api_key, base_url=base_url)
+    selected_model = get_default_model(provider=provider, model=model)
 
     # -----------------------------
     # Phase 1: Parse Syllabus
@@ -200,7 +277,7 @@ Respond ONLY with topic name.
 """
 
                     response = client.chat.completions.create(
-                        model="llama-3.1-8b-instant",
+                        model=selected_model,
                         messages=[{"role": "user", "content": prompt}],
                         temperature=0,
                         max_tokens=50
@@ -251,7 +328,7 @@ Rules:
 """
 
             response = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model=selected_model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.8,
                 max_tokens=800
